@@ -29,7 +29,7 @@ export const ADD_FOLDER_COMMAND = defineCommand('folderShelf.addFolder', async (
   }
 })
 
-export interface AddFolderCommandDeps {
+export interface FolderCommandDeps {
   readonly foldersView: vscode.TreeView<Entry>;
 }
 
@@ -40,7 +40,7 @@ export interface AddFolderCommandDeps {
  */
 export const REMOVE_FOLDER_COMMAND_WIRED = defineWiredCommand(
   'folderShelf.removeFolder',
-  (deps: AddFolderCommandDeps) => {
+  (deps: FolderCommandDeps) => {
     const { foldersView } = deps;
     return async function (): Promise<void> {
       const folderStore = inject(FolderStore);
@@ -127,5 +127,106 @@ export const REMOVE_FOLDER_COMMAND = defineCommand(
     }
 
     await folderStore.remove(targets);
+  }
+);
+
+async function checkFolderExistAndRemoveNotFound(uri: vscode.Uri, folderStore: FolderStore): Promise<boolean> {
+  const pathName = path.basename(uri.fsPath);
+  try {
+    await vscode.workspace.fs.stat(uri);
+    return true;
+  } catch (error) {
+    if (!(error instanceof vscode.FileSystemError && error.code === 'FileNotFound')) {
+      throw error;
+    }
+
+    const REMOVE: vscode.MessageItem = { title: vscode.l10n.t('Remove') };
+    const confirmed = await vscode.window.showWarningMessage(
+      vscode.l10n.t('"{0}" no longer exists on disk. Remove it from the list?', pathName),
+      { modal: true },
+      REMOVE
+    );
+    if (confirmed === REMOVE) {
+      await folderStore.remove([uri]);
+      return true;
+    }
+    return false;
+  }
+}
+
+/** 打开前检查磁盘状态（失效时引导移除），随后 QuickPick 选择打开方式（当前窗口 / 新窗口 / 追加到当前工作区）。 */
+async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): Promise<void> {
+  if (!await checkFolderExistAndRemoveNotFound(uri, folderStore)) {
+    return;
+  }
+
+  // 当前窗口打开
+  const CURRENT: vscode.QuickPickItem = {
+    label: vscode.l10n.t('Open in This Window'),
+    description: vscode.workspace.name,
+    iconPath: new vscode.ThemeIcon('window'),
+  };
+
+  // 新窗口打开
+  const NEW_WINDOW: vscode.QuickPickItem = {
+    label: vscode.l10n.t('Open in New Window'),
+    iconPath: new vscode.ThemeIcon('new-window'),
+  };
+
+  const items: vscode.QuickPickItem[] = [CURRENT, NEW_WINDOW];
+
+  // 添加到当前工作区
+  // if (vscode.workspace.workspaceFolders?.length) {
+  //   items.push({
+  //     label: vscode.l10n.t('Add to Workspace'),
+  //     iconPath: new vscode.ThemeIcon('add'),
+  //   });
+  // }
+
+  const pathName = path.basename(uri.fsPath);
+
+  const choice = await vscode.window.showQuickPick(items, {
+    title: vscode.l10n.t('Open "{0}"', pathName),
+    placeHolder: vscode.l10n.t('Choose how to open this folder'),
+  });
+
+  if (!choice) {
+    return;
+  }
+
+  if ([CURRENT, NEW_WINDOW].includes(choice)) {
+    await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: choice === NEW_WINDOW });
+  } else {
+    // 追加为当前工作区的工作区文件夹（多根工作区）
+    // const start = vscode.workspace.workspaceFolders?.length ?? 0;
+    // const updated = vscode.workspace.updateWorkspaceFolders(start, 0, { uri });
+    // if (!updated) {
+    //   await vscode.window.showErrorMessage(
+    //     vscode.l10n.t('Failed to add "{0}" to the workspace.', pathName)
+    //   );
+    // }
+  }
+}
+
+/**
+ * 打开登记的根文件夹：由条目右侧的 inline 图标触发（view/item/context 的 inline group）。
+ * wire 版本：目标从 foldersView.selection 读取（与 removeFolder 同源，菜单回传的
+ * TreeItem 字段实测不可靠）。多选时取 selection 中第一个登记的根文件夹。
+ */
+export const OPEN_FOLDER_COMMAND_WIRED = defineWiredCommand(
+  'folderShelf.openFolder',
+  (deps: FolderCommandDeps) => {
+    const { foldersView } = deps;
+    return async function (): Promise<void> {
+      const folderStore = inject(FolderStore);
+
+      const target = foldersView.selection.find(
+        (entry): entry is NodeEntry => entry.kind === 'node' && entry.managed === true
+      )?.uri;
+      if (!target) {
+        return;
+      }
+      await openFolderWorkspace(target, folderStore);
+    };
   }
 );

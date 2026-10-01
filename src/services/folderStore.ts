@@ -5,7 +5,7 @@ interface FolderStoreData {
   folders?: string[];
 }
 
-/** 以独立的 JSON 文件持久化用户登记的文件夹列表。 */
+/** 以独立的 JSON 文件持久化用户添加的文件夹列表。 */
 export class FolderStore implements vscode.Disposable {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChange = this._onDidChange.event;

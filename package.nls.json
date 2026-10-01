@@ -2,6 +2,7 @@
   "folderShelf.container.title": "Folder Shelf",
   "folderShelf.openFile.title": "Open File",
   "folderShelf.addFolder.title": "Add Folder",
+  "folderShelf.openFolder.title": "Open Folder",
   "folderShelf.removeFolder.title": "Remove Folder",
   "folderShelf.openFoldersFile.title": "Open folders.json",
   "folderShelf.foldersFile.description": "Absolute path of the JSON file that stores the folder list (e.g. `/Users/me/sync/folders.json`). `~` expands to the home directory. Leave empty to use the extension's global storage (default)."

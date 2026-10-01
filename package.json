@@ -34,6 +34,11 @@
         "icon": "$(new-folder)"
       },
       {
+        "command": "folderShelf.openFolder",
+        "title": "%folderShelf.openFolder.title%",
+        "icon": "$(folder-opened)"
+      },
+      {
         "command": "folderShelf.openFoldersFile",
         "title": "%folderShelf.openFoldersFile.title%",
         "icon": "$(json)"
@@ -47,6 +52,10 @@
       "commandPalette": [
         {
           "command": "folderShelf.openFile",
+          "when": "false"
+        },
+        {
+          "command": "folderShelf.openFolder",
           "when": "false"
         },
         {
@@ -67,6 +76,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "folderShelf.openFolder",
+          "when": "view == folderShelf.views.folders && viewItem == folders.folder",
+          "group": "inline"
+        },
         {
           "command": "folderShelf.removeFolder",
           "when": "view == folderShelf.views.folders && viewItem == folders.folder",

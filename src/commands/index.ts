@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import { OPEN_FILE_COMMAND, OPEN_FOLDERS_FILE_COMMAND } from './fileCommands';
-import { ADD_FOLDER_COMMAND, REMOVE_FOLDER_COMMAND_WIRED } from './folderCommands';
-import type { AddFolderCommandDeps } from './folderCommands';
+import { ADD_FOLDER_COMMAND, OPEN_FOLDER_COMMAND_WIRED, REMOVE_FOLDER_COMMAND_WIRED } from './folderCommands';
+import type { FolderCommandDeps } from './folderCommands';
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface CommandDeps extends AddFolderCommandDeps {
+export interface CommandDeps extends FolderCommandDeps {
 
 }
 
@@ -13,6 +13,7 @@ export function registerCommands(deps: CommandDeps): vscode.Disposable[] {
     OPEN_FILE_COMMAND,
     OPEN_FOLDERS_FILE_COMMAND,
     ADD_FOLDER_COMMAND,
+    OPEN_FOLDER_COMMAND_WIRED.wire(deps),
     REMOVE_FOLDER_COMMAND_WIRED.wire(deps),
   ];
 
@@ -25,5 +26,6 @@ export {
   OPEN_FILE_COMMAND,
   OPEN_FOLDERS_FILE_COMMAND,
   ADD_FOLDER_COMMAND,
+  OPEN_FOLDER_COMMAND_WIRED,
   REMOVE_FOLDER_COMMAND_WIRED
 };

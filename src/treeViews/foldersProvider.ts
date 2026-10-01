@@ -14,7 +14,12 @@ export interface PlaceholderEntry {
   readonly kind: 'placeholder';
 }
 
-export type Entry = NodeEntry | PlaceholderEntry;
+/** 目录在磁盘上已不存在时展示的失效占位条目 */
+export interface MissingEntry {
+  readonly kind: 'missing';
+}
+
+export type Entry = NodeEntry | PlaceholderEntry | MissingEntry;
 
 export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<Entry | undefined>();
@@ -30,6 +35,7 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
     this._onDidChangeTreeData.dispose();
   }
 
+  // 后执行
   getTreeItem(element: Entry): vscode.TreeItem {
     // 空列表占位项，点击即添加文件夹
     if (element.kind === 'placeholder') {
@@ -41,6 +47,16 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
       item.command = ADD_FOLDER_COMMAND.treeItemCommand(
         vscode.l10n.t('Add Folder')
       );
+      return item;
+    }
+
+    // 失效占位项：登记的目录在磁盘上不存在
+    if (element.kind === 'missing') {
+      const item = new vscode.TreeItem(
+        vscode.l10n.t('Folder is missing on disk'),
+        vscode.TreeItemCollapsibleState.None
+      );
+      item.iconPath = new vscode.ThemeIcon('warning');
       return item;
     }
 
@@ -58,7 +74,8 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
       );
     }
 
-    // 仅根层级登记的文件夹标记 contextValue（与 package.json 的 when 子句对应）
+    // 仅根层级登记的文件夹标记 contextValue（与 package.json 的 when 子句对应）。
+    // 打开操作由条目右侧的 inline 图标触发（view/item/context inline group），不绑定行单击命令
     if (element.managed) {
       item.contextValue = 'folders.folder';
     }
@@ -66,6 +83,7 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
     return item;
   }
 
+  // 先执行
   async getChildren(element?: Entry): Promise<Entry[]> {
     // 根层级：返回 JSON 中登记的文件夹；为空时给出占位提示
     if (!element) {
@@ -80,12 +98,23 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
         managed: true,
       }));
     }
-    if (element.kind === 'placeholder') {
+    if (element.kind === 'placeholder' || element.kind === 'missing') {
       return [];
     }
 
     const parentUri = element.uri;
-    const entries = await vscode.workspace.fs.readDirectory(parentUri);
+    let entries: Array<[string, vscode.FileType]>;
+    
+    try {
+      entries = await vscode.workspace.fs.readDirectory(parentUri);
+    } catch (error) {
+      // 目录已被删除/移动时展示失效占位项，而不是让整个树抛错
+      if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') {
+        return [{ kind: 'missing' }];
+      }
+      throw error;
+    }
+
     return entries
       .map(([name, type]): NodeEntry => ({
         kind: 'node',
