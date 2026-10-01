@@ -1,0 +1,8 @@
+{
+  "folderShelf.container.title": "文件夹书架",
+  "folderShelf.openFile.title": "打开文件",
+  "folderShelf.addFolder.title": "添加文件夹",
+  "folderShelf.removeFolder.title": "移除文件夹",
+  "folderShelf.openFoldersFile.title": "打开 folders.json",
+  "folderShelf.foldersFile.description": "存储文件夹列表的 JSON 文件的绝对路径（如 `/Users/me/sync/folders.json`），支持 `~` 表示用户主目录；留空时使用扩展的全局存储（默认）。"
+}

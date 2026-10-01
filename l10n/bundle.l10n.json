@@ -1,0 +1,10 @@
+{
+  "No folders added yet. Click to add one.": "No folders added yet. Click to add one.",
+  "Add Folder": "Add Folder",
+  "Open File": "Open File",
+  "Select Folders to Add": "Select Folders to Add",
+  "{0} folder(s) already in the list and were skipped.": "{0} folder(s) already in the list and were skipped.",
+  "Remove": "Remove",
+  "Remove \"{0}\" from the list? Files on disk will not be affected.": "Remove \"{0}\" from the list? Files on disk will not be affected.",
+  "Remove {0} folders ({1}) from the list? Files on disk will not be affected.": "Remove {0} folders ({1}) from the list? Files on disk will not be affected."
+}

@@ -1,0 +1,128 @@
+{
+  "name": "folder-shelf",
+  "displayName": "Folder Shelf",
+  "description": "Collect frequently used folders in the sidebar and open them with a single click.",
+  "icon": "resources/icon.png",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "l10n": "./l10n",
+  "files": [
+    "dist",
+    "resources",
+    "l10n",
+    "package.nls.json",
+    "package.nls.zh-cn.json",
+    "README.md",
+    "README.en.md"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "folderShelf.openFile",
+        "title": "%folderShelf.openFile.title%"
+      },
+      {
+        "command": "folderShelf.addFolder",
+        "title": "%folderShelf.addFolder.title%",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "folderShelf.openFoldersFile",
+        "title": "%folderShelf.openFoldersFile.title%",
+        "icon": "$(json)"
+      },
+      {
+        "command": "folderShelf.removeFolder",
+        "title": "%folderShelf.removeFolder.title%"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "folderShelf.openFile",
+          "when": "false"
+        },
+        {
+          "command": "folderShelf.removeFolder",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "folderShelf.addFolder",
+          "when": "view == folderShelf.views.folders",
+          "group": "navigation"
+        },
+        {
+          "command": "folderShelf.openFoldersFile",
+          "when": "view == folderShelf.views.folders",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "folderShelf.removeFolder",
+          "when": "view == folderShelf.views.folders && viewItem == folders.folder",
+          "group": "9_folderShelf"
+        }
+      ]
+    },
+    "configuration": [
+      {
+        "title": "%folderShelf.container.title%",
+        "properties": {
+          "folderShelf.foldersFile": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "%folderShelf.foldersFile.description%",
+            "scope": "application"
+          }
+        }
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "folderShelf",
+          "title": "%folderShelf.container.title%",
+          "icon": "resources/activity-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "folderShelf": [
+        {
+          "type": "tree",
+          "id": "folderShelf.views.folders",
+          "name": "%folderShelf.container.title%",
+          "icon": "resources/activity-icon.svg"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "watch:esbuild": "node esbuild.mjs --watch",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint .",
+    "l10n:extract": "vscode-l10n-dev export ./src --outDir ./l10n",
+    "vscode:prepublish": "npm run check-types && npm run lint && npm run l10n:extract && node esbuild.mjs",
+    "package": "vsce package --no-dependencies --allow-missing-repository --skip-license"
+  },
+  "devDependencies": {
+    "@types/node": "24.x",
+    "@types/vscode": "^1.138.0",
+    "@vscode/l10n-dev": "^0.0.35",
+    "@vscode/vsce": "^4.0.0",
+    "eslint": "^10.5.0",
+    "esbuild": "^0.28.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1"
+  }
+}
