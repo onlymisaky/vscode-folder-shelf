@@ -1,7 +1,9 @@
 
 import * as vscode from 'vscode';
 
-export interface CommandDefinition<Id extends string, Args extends unknown[] = []> {
+export type CommandId = `folderShelf.${string}`;
+
+export interface CommandDefinition<Id extends CommandId, Args extends unknown[] = []> {
   readonly id: Id;
   readonly callback: (...args: Args) => void | Promise<void>;
   /**  @deprecated */
@@ -13,14 +15,18 @@ export interface CommandDefinition<Id extends string, Args extends unknown[] = [
   treeItemCommand: (title: string, ...args: Args) => vscode.Command;
 }
 
-export function defineCommand<Id extends string, Args extends unknown[] = []>(
+export function ensureCommandId(id: string): asserts id is CommandId {
+  if (!/^folderShelf(\.[a-zA-Z0-9-]+)+$/.test(id)) {
+    throw new Error(`invalid command id: ${id}`);
+  }
+}
+
+export function defineCommand<Id extends CommandId, Args extends unknown[] = []>(
   id: Id,
   callback: (...args: Args) => void | Promise<void>
 ): CommandDefinition<Id, Args> {
 
-  if (!/^[a-zA-Z0-9.-]+\.[a-zA-Z0-9-]+$/.test(id)) {
-    throw new Error(`invalid command id: ${id}`);
-  }
+  ensureCommandId(id);
   
   function useCommand(): string;
   function useCommand(title: string): vscode.Command;
