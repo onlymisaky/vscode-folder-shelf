@@ -1,20 +1,16 @@
 import * as vscode from 'vscode';
 import { OPEN_FILE_COMMAND, OPEN_FOLDERS_FILE_COMMAND } from './fileCommands';
-import { ADD_FOLDER_COMMAND, OPEN_FOLDER_COMMAND_WIRED, REMOVE_FOLDER_COMMAND_WIRED } from './folderCommands';
-import type { FolderCommandDeps } from './folderCommands';
+import { ADD_FOLDER_COMMAND, OPEN_FOLDER_COMMAND, REMOVE_FOLDER_COMMAND } from './folderCommands';
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface CommandDeps extends FolderCommandDeps {
-
-}
-
-export function registerCommands(deps: CommandDeps): vscode.Disposable[] {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function registerCommands(_deps: unknown): vscode.Disposable[] {
   const commands = [
     OPEN_FILE_COMMAND,
     OPEN_FOLDERS_FILE_COMMAND,
     ADD_FOLDER_COMMAND,
-    OPEN_FOLDER_COMMAND_WIRED.wire(deps),
-    REMOVE_FOLDER_COMMAND_WIRED.wire(deps),
+    OPEN_FOLDER_COMMAND,
+    REMOVE_FOLDER_COMMAND,
+    // REMOVE_FOLDER_COMMAND_WIRED.wire(deps),
   ];
 
   return commands.map((command) => {
@@ -26,6 +22,6 @@ export {
   OPEN_FILE_COMMAND,
   OPEN_FOLDERS_FILE_COMMAND,
   ADD_FOLDER_COMMAND,
-  OPEN_FOLDER_COMMAND_WIRED,
-  REMOVE_FOLDER_COMMAND_WIRED
+  OPEN_FOLDER_COMMAND,
+  REMOVE_FOLDER_COMMAND,
 };

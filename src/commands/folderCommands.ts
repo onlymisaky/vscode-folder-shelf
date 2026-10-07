@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 import { defineCommand } from './defineCommand';
-import { defineWiredCommand } from './defineWiredCommand';
 import { FolderStore } from '../services/folderStore';
 import { inject } from '../services/container';
 import type { Entry, NodeEntry } from '../treeViews/foldersProvider';
@@ -29,81 +28,46 @@ export const ADD_FOLDER_COMMAND = defineCommand('folderShelf.addFolder', async (
   }
 })
 
-export interface FolderCommandDeps {
-  readonly foldersView: vscode.TreeView<Entry>;
+
+/**
+ * 判断菜单/inline 回传参数是否为登记的根文件夹元素。
+ * 实测（Trae CN，VSCode 分支同源）：view/item/context 与 inline 菜单回传的是
+ * getChildren 返回的元素本身（Entry），而非 TreeItem，故直接按类型收窄。
+ */
+function isManagedEntry(value: unknown): value is NodeEntry {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as NodeEntry).kind === 'node' &&
+    (value as NodeEntry).managed === true
+  );
+}
+
+/**
+ * 从菜单/inline 图标回传的参数解析目标（登记的根文件夹），按 fsPath 去重。
+ * 实测：回传的是 getChildren 返回的元素本身（Entry），而非 TreeItem；
+ * 多选时第二参数为 selection 数组。两个命令均仅从菜单触发，参数恒有值。
+ */
+function collectManagedUris(item?: Entry, selectedItems?: readonly Entry[]): vscode.Uri[] {
+  const uris = new Map<string, vscode.Uri>();
+  for (const raw of [item, ...(selectedItems ?? [])]) {
+    if (isManagedEntry(raw)) {
+      uris.set(raw.uri.fsPath, raw.uri);
+    }
+  }
+  return [...uris.values()];
 }
 
 /**
  * 移除文件夹：从树条目右键菜单触发，仅从列表移除（不影响磁盘文件）。
- * wire 版本：folders 视图实例由组合根显式传入，读取 selection（右键未选中项时
- * VSCode 会先选中它）天然支持多选，避免依赖右键菜单回传 TreeItem。
- */
-export const REMOVE_FOLDER_COMMAND_WIRED = defineWiredCommand(
-  'folderShelf.removeFolder',
-  (deps: FolderCommandDeps) => {
-    const { foldersView } = deps;
-    return async function (): Promise<void> {
-      const folderStore = inject(FolderStore);
-
-      const targets = foldersView.selection
-        .filter((entry): entry is NodeEntry => entry.kind === 'node' && entry.managed === true)
-        .map((entry) => entry.uri);
-      if (targets.length === 0) {
-        return;
-      }
-
-      const REMOVE: vscode.MessageItem = { title: vscode.l10n.t('Remove') };
-      const names = targets.map((uri) => path.basename(uri.fsPath));
-      const message =
-        names.length === 1 && names[0] !== undefined
-          ? vscode.l10n.t(
-            'Remove "{0}" from the list? Files on disk will not be affected.',
-            names[0]
-          )
-          : vscode.l10n.t(
-            'Remove {0} folders ({1}) from the list? Files on disk will not be affected.',
-            names.length,
-            names.join(', ')
-          );
-      const confirmed = await vscode.window.showWarningMessage(message, { modal: true }, REMOVE);
-      if (confirmed !== REMOVE) {
-        return;
-      }
-
-      await folderStore.remove(targets);
-    };
-  }
-);
-
-/**
- * 移除文件夹：从树条目右键菜单触发，仅从列表移除（不影响磁盘文件）。
- * 支持多选：多选时 VSCode 以 (item, selection) 两个参数传入。
+ * 目标从菜单回传参数解析（多选时 VSCode 回传 (item, selectedItems)）。
  */
 export const REMOVE_FOLDER_COMMAND = defineCommand(
   'folderShelf.removeFolder',
-  async (
-    item?: vscode.TreeItem | vscode.TreeItem[],
-    selection?: readonly vscode.TreeItem[]
-  ): Promise<void> => {
+  async (item?: Entry, selectedItems?: readonly Entry[]): Promise<void> => {
     const folderStore = inject(FolderStore);
 
-    const items: readonly vscode.TreeItem[] =
-      selection && selection.length > 0
-        ? selection
-        : Array.isArray(item)
-          ? item
-          : item
-            ? [item]
-            : [];
-
-    // 仅处理登记的根文件夹，避免误删多选中的子级条目
-    const uris = new Map<string, vscode.Uri>();
-    for (const treeItem of items) {
-      if (treeItem.contextValue === 'folders.folder' && treeItem.resourceUri) {
-        uris.set(treeItem.resourceUri.fsPath, treeItem.resourceUri);
-      }
-    }
-    const targets = [...uris.values()];
+    const targets = collectManagedUris(item, selectedItems);
     if (targets.length === 0) {
       return;
     }
@@ -210,23 +174,17 @@ async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): P
 
 /**
  * 打开登记的根文件夹：由条目右侧的 inline 图标触发（view/item/context 的 inline group）。
- * wire 版本：目标从 foldersView.selection 读取（与 removeFolder 同源，菜单回传的
- * TreeItem 字段实测不可靠）。多选时取 selection 中第一个登记的根文件夹。
+ * 目标取 inline 回传的元素。
  */
-export const OPEN_FOLDER_COMMAND_WIRED = defineWiredCommand(
+export const OPEN_FOLDER_COMMAND = defineCommand(
   'folderShelf.openFolder',
-  (deps: FolderCommandDeps) => {
-    const { foldersView } = deps;
-    return async function (): Promise<void> {
-      const folderStore = inject(FolderStore);
+  async (item?: Entry): Promise<void> => {
+    const folderStore = inject(FolderStore);
 
-      const target = foldersView.selection.find(
-        (entry): entry is NodeEntry => entry.kind === 'node' && entry.managed === true
-      )?.uri;
-      if (!target) {
-        return;
-      }
-      await openFolderWorkspace(target, folderStore);
-    };
+    const [target] = collectManagedUris(item, undefined);
+    if (!target) {
+      return;
+    }
+    await openFolderWorkspace(target, folderStore);
   }
 );
