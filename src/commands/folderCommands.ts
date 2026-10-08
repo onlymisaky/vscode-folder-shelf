@@ -139,12 +139,13 @@ async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): P
   const items: vscode.QuickPickItem[] = [CURRENT, NEW_WINDOW];
 
   // 添加到当前工作区
-  // if (vscode.workspace.workspaceFolders?.length) {
-  //   items.push({
-  //     label: vscode.l10n.t('Add to Workspace'),
-  //     iconPath: new vscode.ThemeIcon('add'),
-  //   });
-  // }
+  // 暂不开放该功能
+  if (vscode.workspace.workspaceFolders?.length && false) {
+    items.push({
+      label: vscode.l10n.t('Add to Workspace'),
+      iconPath: new vscode.ThemeIcon('add'),
+    });
+  }
 
   const pathName = path.basename(uri.fsPath);
 
@@ -161,13 +162,13 @@ async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): P
     await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: choice === NEW_WINDOW });
   } else {
     // 追加为当前工作区的工作区文件夹（多根工作区）
-    // const start = vscode.workspace.workspaceFolders?.length ?? 0;
-    // const updated = vscode.workspace.updateWorkspaceFolders(start, 0, { uri });
-    // if (!updated) {
-    //   await vscode.window.showErrorMessage(
-    //     vscode.l10n.t('Failed to add "{0}" to the workspace.', pathName)
-    //   );
-    // }
+    const start = vscode.workspace.workspaceFolders?.length ?? 0;
+    const updated = vscode.workspace.updateWorkspaceFolders(start, 0, { uri });
+    if (!updated) {
+      await vscode.window.showErrorMessage(
+        vscode.l10n.t('Failed to add "{0}" to the workspace.', pathName)
+      );
+    }
   }
 }
 

@@ -3,8 +3,8 @@ import { registerTreeViews } from './treeViews';
 import { registerCommands } from './commands';
 import { registerServices } from './services';
 
-export function activate(context: vscode.ExtensionContext): void {
-  const services = registerServices(context);
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  const services = await registerServices(context);
   const { disposables: treeViewDisposables, foldersView } = registerTreeViews();
   const commands = registerCommands({ foldersView });
 

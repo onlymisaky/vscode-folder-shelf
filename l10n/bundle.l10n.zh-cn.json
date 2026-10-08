@@ -6,6 +6,8 @@
   "Select Folders to Add": "选择要添加的文件夹",
   "{0} folder(s) already in the list and were skipped.": "有 {0} 个文件夹已在列表中，已跳过",
   "Remove": "移除",
+  "Remove \"{0}\" from the list? Files on disk will not be affected.": "确定从列表中移除“{0}”？不会影响磁盘上的文件。",
+  "Remove {0} folders ({1}) from the list? Files on disk will not be affected.": "确定从列表中移除 {0} 个文件夹（{1}）？不会影响磁盘上的文件。",
   "\"{0}\" no longer exists on disk. Remove it from the list?": "“{0}”已不存在于磁盘上，要从列表中移除吗？",
   "Open in This Window": "在当前窗口打开",
   "Open in New Window": "在新窗口打开",
@@ -13,6 +15,4 @@
   "Open \"{0}\"": "打开“{0}”",
   "Choose how to open this folder": "选择打开此文件夹的方式",
   "Failed to add \"{0}\" to the workspace.": "无法将“{0}”添加到工作区",
-  "Remove \"{0}\" from the list? Files on disk will not be affected.": "确定从列表中移除“{0}”？不会影响磁盘上的文件。",
-  "Remove {0} folders ({1}) from the list? Files on disk will not be affected.": "确定从列表中移除 {0} 个文件夹（{1}）？不会影响磁盘上的文件。"
 }
