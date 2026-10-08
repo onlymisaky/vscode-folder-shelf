@@ -28,7 +28,6 @@ export const ADD_FOLDER_COMMAND = defineCommand('folderShelf.addFolder', async (
   }
 })
 
-
 /**
  * 判断菜单/inline 回传参数是否为登记的根文件夹元素。
  * 实测（Trae CN，VSCode 分支同源）：view/item/context 与 inline 菜单回传的是
