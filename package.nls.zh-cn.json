@@ -2,6 +2,7 @@
   "folderShelf.container.title": "文件夹书架",
   "folderShelf.openFile.title": "打开文件",
   "folderShelf.addFolder.title": "添加文件夹",
+  "folderShelf.addCurrentProject.title": "添加当前项目",
   "folderShelf.openFolder.title": "打开文件夹",
   "folderShelf.removeFolder.title": "移除文件夹",
   "folderShelf.openFoldersFile.title": "打开 folders.json",

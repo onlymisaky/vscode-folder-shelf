@@ -3,8 +3,9 @@
   "Add Folder": "添加文件夹",
   "Folder is missing on disk": "文件夹在磁盘上不存在",
   "Open File": "打开文件",
-  "Select Folders to Add": "选择要添加的文件夹",
   "{0} folder(s) already in the list and were skipped.": "有 {0} 个文件夹已在列表中，已跳过",
+  "Select Folders to Add": "选择要添加的文件夹",
+  "No folder is currently open.": "当前没有打开的文件夹",
   "Remove": "移除",
   "Remove \"{0}\" from the list? Files on disk will not be affected.": "确定从列表中移除“{0}”？不会影响磁盘上的文件。",
   "Remove {0} folders ({1}) from the list? Files on disk will not be affected.": "确定从列表中移除 {0} 个文件夹（{1}）？不会影响磁盘上的文件。",
@@ -14,5 +15,5 @@
   "Add to Workspace": "添加到工作区",
   "Open \"{0}\"": "打开“{0}”",
   "Choose how to open this folder": "选择打开此文件夹的方式",
-  "Failed to add \"{0}\" to the workspace.": "无法将“{0}”添加到工作区",
+  "Failed to add \"{0}\" to the workspace.": "无法将“{0}”添加到工作区"
 }

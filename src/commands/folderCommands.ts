@@ -5,6 +5,19 @@ import { FolderStore } from '../services/folderStore';
 import { inject } from '../services/container';
 import type { Entry, NodeEntry } from '../treeViews/foldersProvider';
 
+/** 加入列表并提示被跳过的重复项（addFolder 与「添加当前项目」共用）。 */
+async function addAndReportSkipped(
+  folderStore: FolderStore,
+  uris: readonly vscode.Uri[]
+): Promise<void> {
+  const { skipped } = await folderStore.add(uris);
+  if (skipped > 0) {
+    await vscode.window.showInformationMessage(
+      vscode.l10n.t('{0} folder(s) already in the list and were skipped.', skipped)
+    );
+  }
+}
+
 export const ADD_FOLDER_COMMAND = defineCommand('folderShelf.addFolder', async () => {
   const folderStore = inject(FolderStore);
 
@@ -20,13 +33,32 @@ export const ADD_FOLDER_COMMAND = defineCommand('folderShelf.addFolder', async (
     return;
   }
 
-  const { skipped } = await folderStore.add(uris);
-  if (skipped > 0) {
-    await vscode.window.showInformationMessage(
-      vscode.l10n.t('{0} folder(s) already in the list and were skipped.', skipped)
-    );
-  }
+  await addAndReportSkipped(folderStore, uris);
 })
+
+/**
+ * 将当前窗口打开的项目加入列表（多根工作区取全部根文件夹）。
+ * 由视图标题栏按钮或命令面板触发；过滤掉 untitled 等非磁盘目录。
+ */
+export const ADD_CURRENT_PROJECT_COMMAND = defineCommand(
+  'folderShelf.addCurrentProject',
+  async (): Promise<void> => {
+    const folderStore = inject(FolderStore);
+
+    const uris = (vscode.workspace.workspaceFolders ?? [])
+      .map((folder) => folder.uri)
+      .filter((uri) => uri.scheme === 'file');
+
+    if (uris.length === 0) {
+      await vscode.window.showInformationMessage(
+        vscode.l10n.t('No folder is currently open.')
+      );
+      return;
+    }
+
+    await addAndReportSkipped(folderStore, uris);
+  }
+);
 
 /**
  * 判断菜单/inline 回传参数是否为登记的根文件夹元素。
