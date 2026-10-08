@@ -49,6 +49,11 @@
         "icon": "$(json)"
       },
       {
+        "command": "folderShelf.collapseAll",
+        "title": "%folderShelf.collapseAll.title%",
+        "icon": "$(collapse-all)"
+      },
+      {
         "command": "folderShelf.removeFolder",
         "title": "%folderShelf.removeFolder.title%"
       }
@@ -81,6 +86,11 @@
         },
         {
           "command": "folderShelf.openFoldersFile",
+          "when": "view == folderShelf.views.folders",
+          "group": "navigation"
+        },
+        {
+          "command": "folderShelf.collapseAll",
           "when": "view == folderShelf.views.folders",
           "group": "navigation"
         }

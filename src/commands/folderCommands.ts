@@ -61,6 +61,17 @@ export const ADD_CURRENT_PROJECT_COMMAND = defineCommand(
 );
 
 /**
+ * 一键折叠视图中的全部目录。
+ * VSCode 会为每个 createTreeView 注册内部命令
+ * `workbench.actions.treeView.<viewId>.collapseAll`，直接转发即可。
+ */
+export const COLLAPSE_ALL_COMMAND = defineCommand('folderShelf.collapseAll', async () => {
+  await vscode.commands.executeCommand(
+    'workbench.actions.treeView.folderShelf.views.folders.collapseAll'
+  );
+});
+
+/**
  * 判断菜单/inline 回传参数是否为登记的根文件夹元素。
  * 实测（Trae CN，VSCode 分支同源）：view/item/context 与 inline 菜单回传的是
  * getChildren 返回的元素本身（Entry），而非 TreeItem，故直接按类型收窄。

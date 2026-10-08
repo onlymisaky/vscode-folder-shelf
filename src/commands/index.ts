@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { OPEN_FILE_COMMAND, OPEN_FOLDERS_FILE_COMMAND } from './fileCommands';
-import { ADD_CURRENT_PROJECT_COMMAND, ADD_FOLDER_COMMAND, OPEN_FOLDER_COMMAND, REMOVE_FOLDER_COMMAND } from './folderCommands';
+import { ADD_CURRENT_PROJECT_COMMAND, ADD_FOLDER_COMMAND, COLLAPSE_ALL_COMMAND, OPEN_FOLDER_COMMAND, REMOVE_FOLDER_COMMAND } from './folderCommands';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function registerCommands(_deps: unknown): vscode.Disposable[] {
@@ -11,6 +11,7 @@ export function registerCommands(_deps: unknown): vscode.Disposable[] {
     ADD_CURRENT_PROJECT_COMMAND,
     OPEN_FOLDER_COMMAND,
     REMOVE_FOLDER_COMMAND,
+    COLLAPSE_ALL_COMMAND,
     // REMOVE_FOLDER_COMMAND_WIRED.wire(deps),
   ];
 
@@ -26,4 +27,5 @@ export {
   ADD_CURRENT_PROJECT_COMMAND,
   OPEN_FOLDER_COMMAND,
   REMOVE_FOLDER_COMMAND,
+  COLLAPSE_ALL_COMMAND,
 };

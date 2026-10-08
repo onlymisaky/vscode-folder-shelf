@@ -1,7 +1,8 @@
+import { defineConfig } from 'eslint/config'
 import tseslint from 'typescript-eslint';
 
 /** TypeScript 源码使用的 ESLint 扁平配置。 */
-export default tseslint.config(
+export default defineConfig(
   { ignores: ['dist/**', 'node_modules/**', '*.vsix'] },
   ...tseslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked.map((configuration) => ({
