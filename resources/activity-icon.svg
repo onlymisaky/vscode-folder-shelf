@@ -1,7 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-  <!-- 侧边栏（Activity Bar）图标：VSCode 会按主题自动重新着色，保持单色剪影即可 -->
-  <g fill="none" stroke="#424242" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3.25 7.5a2.25 2.25 0 0 1 2.25-2.25h3.3a2.25 2.25 0 0 1 1.7.78l1.3 1.47h6.7a2.25 2.25 0 0 1 2.25 2.25v7.5a2.25 2.25 0 0 1-2.25 2.25h-13a2.25 2.25 0 0 1-2.25-2.25V7.5Z"/>
-    <path d="M7.4 12.3h5.6M7.4 15.7h3.6"/>
+  <!-- 侧边栏（Activity Bar）图标：书架剪影，VSCode 会按主题自动重新着色，保持单色线条 -->
+  <g fill="none" stroke="#424242" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.75" y="2.5" width="18.5" height="19" rx="2.2"/>
+    <path d="M2.75 11.75h18.5"/>
+    <path d="M7.2 5v6.75M10.6 4.25v7.5"/>
+    <path d="M14.9 11.55 17.5 3.9"/>
+    <path d="M6.5 15.2h11.5M7.5 17.8h9.5"/>
   </g>
 </svg>

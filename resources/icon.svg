@@ -1,21 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256">
+  <!-- 书架：文件夹作为"书"陈列在架上，呼应「文件夹书架」的产品隐喻 -->
   <defs>
-    <linearGradient id="folder-back" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="shelf" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#2F8FE0"/>
       <stop offset="1" stop-color="#0B5EAD"/>
     </linearGradient>
-    <linearGradient id="folder-front" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#5FB3F8"/>
-      <stop offset="1" stop-color="#2E96E8"/>
-    </linearGradient>
   </defs>
-  <path d="M6 15a5 5 0 0 1 5-5h13.2a5 5 0 0 1 3.8 1.75L30.6 15H53a5 5 0 0 1 5 5v28a5 5 0 0 1-5 5H11a5 5 0 0 1-5-5V15Z" fill="url(#folder-back)"/>
-  <path d="M6 24h52v24a5 5 0 0 1-5 5H11a5 5 0 0 1-5-5V24Z" fill="url(#folder-front)"/>
-  <rect x="19" y="19" width="26" height="26" rx="4" fill="#FDFDFE"/>
-  <circle cx="25.5" cy="26" r="2.1" fill="#1E7FD6"/>
-  <rect x="30.5" y="24.3" width="10" height="3.4" rx="1.7" fill="#1E7FD6"/>
-  <circle cx="25.5" cy="33" r="2.1" fill="#1E7FD6"/>
-  <rect x="30.5" y="31.3" width="10" height="3.4" rx="1.7" fill="#1E7FD6"/>
-  <circle cx="25.5" cy="40" r="2.1" fill="#1E7FD6"/>
-  <rect x="30.5" y="38.3" width="6.8" height="3.4" rx="1.7" fill="#1E7FD6"/>
+  <!-- 下层：书堆（先画，底边塞进底板之下） -->
+  <g>
+    <rect x="17.5" y="40" width="5.5" height="13.8" rx="1.2" fill="#2BB3A3"/>
+    <rect x="24.5" y="43.5" width="5.5" height="10.3" rx="1.2" fill="#5FB3F8"/>
+    <rect x="33.5" y="45.3" width="13.5" height="3.9" rx="1.4" fill="#2E96E8"/>
+    <rect x="35" y="49.9" width="11" height="3.9" rx="1.4" fill="#F6A821"/>
+  </g>
+  <!-- 上层：立书 + 斜靠的书 + 文件夹书（先画，底边由隔板压住） -->
+  <g>
+    <rect x="17.5" y="16" width="5.5" height="15" rx="1.2" fill="#2E96E8"/>
+    <rect x="24.5" y="13" width="5.5" height="18" rx="1.2" fill="#0B5EAD"/>
+    <rect x="31.5" y="14.5" width="4.8" height="16.5" rx="1.2" fill="#F6A821" transform="rotate(-12 33.9 30.8)"/>
+    <g fill="#5FB3F8">
+      <rect x="39.5" y="17" width="4.5" height="4.5" rx="1.5"/>
+      <rect x="39.5" y="19" width="9" height="12" rx="1.8"/>
+    </g>
+  </g>
+  <!-- 框架：左右立柱 + 顶板 + 底板（外框挖空） -->
+  <path fill="url(#shelf)" fill-rule="evenodd" d="M12 6h40a3 3 0 0 1 3 3v46a3 3 0 0 1-3 3H12a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3Zm3 6a1.5 1.5 0 0 0-1.5 1.5v38A1.5 1.5 0 0 0 15 53h34a1.5 1.5 0 0 0 1.5-1.5v-38A1.5 1.5 0 0 0 49 12H15Z"/>
+  <!-- 中层隔板 -->
+  <rect x="15" y="30" width="34" height="5" rx="1.5" fill="url(#shelf)"/>
 </svg>

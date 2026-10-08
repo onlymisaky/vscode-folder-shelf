@@ -176,7 +176,7 @@ async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): P
   // 新窗口打开
   const NEW_WINDOW: vscode.QuickPickItem = {
     label: vscode.l10n.t('Open in New Window'),
-    iconPath: new vscode.ThemeIcon('new-window'),
+    iconPath: new vscode.ThemeIcon('empty-window'),
   };
 
   const items: vscode.QuickPickItem[] = [CURRENT, NEW_WINDOW];

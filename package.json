@@ -1,7 +1,7 @@
 {
   "name": "folder-shelf",
-  "displayName": "Folder Shelf",
-  "description": "Collect frequently used folders in the sidebar and open them with a single click.",
+  "displayName": "%folderShelf.displayName%",
+  "description": "%folderShelf.description%",
   "icon": "resources/icon.png",
   "version": "0.0.1",
   "engines": {
@@ -41,7 +41,7 @@
       {
         "command": "folderShelf.openFolder",
         "title": "%folderShelf.openFolder.title%",
-        "icon": "$(folder-opened)"
+        "icon": "$(open-in-product)"
       },
       {
         "command": "folderShelf.openFoldersFile",
