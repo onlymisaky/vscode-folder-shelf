@@ -9,5 +9,6 @@
   "folderShelf.removeFolder.title": "Remove Folder",
   "folderShelf.openFoldersFile.title": "Open folders.json",
   "folderShelf.collapseAll.title": "Collapse All",
+  "folderShelf.refresh.title": "Reload List",
   "folderShelf.foldersFile.description": "Absolute path of the JSON file that stores the folder list (e.g. `/Users/me/sync/folders.json`). `~` expands to the home directory. Leave empty to use `~/.folder-shelf/folders.json` (default), falling back to the extension's global storage if unavailable."
 }

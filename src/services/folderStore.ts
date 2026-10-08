@@ -31,6 +31,12 @@ export class FolderStore implements vscode.Disposable {
     this._onDidChange.fire();
   }
 
+  /** 丢弃缓存并触发刷新，下次 getAll 重新从 JSON 文件加载（文件可能在外部被修改）。 */
+  refresh(): void {
+    this.cache = undefined;
+    this._onDidChange.fire();
+  }
+
   /** 当前持久化文件的 Uri（设置变更后随之更新）。 */
   get file(): vscode.Uri {
     return this.fileUri;

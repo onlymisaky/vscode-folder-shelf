@@ -54,6 +54,11 @@
         "icon": "$(collapse-all)"
       },
       {
+        "command": "folderShelf.refresh",
+        "title": "%folderShelf.refresh.title%",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "folderShelf.removeFolder",
         "title": "%folderShelf.removeFolder.title%"
       }
@@ -91,6 +96,11 @@
         },
         {
           "command": "folderShelf.collapseAll",
+          "when": "view == folderShelf.views.folders",
+          "group": "navigation"
+        },
+        {
+          "command": "folderShelf.refresh",
           "when": "view == folderShelf.views.folders",
           "group": "navigation"
         }

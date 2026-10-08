@@ -61,6 +61,13 @@ export const ADD_CURRENT_PROJECT_COMMAND = defineCommand(
 );
 
 /**
+ * 重新加载 folders.json：文件可能在外部被修改，丢弃缓存并触发视图刷新。
+ */
+export const REFRESH_COMMAND = defineCommand('folderShelf.refresh', () => {
+  inject(FolderStore).refresh();
+});
+
+/**
  * 一键折叠视图中的全部目录。
  * VSCode 会为每个 createTreeView 注册内部命令
  * `workbench.actions.treeView.<viewId>.collapseAll`，直接转发即可。
