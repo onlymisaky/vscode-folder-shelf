@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
-import { ADD_FOLDER_COMMAND, OPEN_FILE_COMMAND } from '../commands';
+import { ADD_ITEM_COMMAND, OPEN_FILE_COMMAND } from '../commands';
 import { FolderStore } from '../services/folderStore';
 
 export interface NodeEntry {
   readonly kind: 'node';
   readonly uri: vscode.Uri;
   readonly type: vscode.FileType;
-  /** 仅根层级登记的文件夹为 true，用于设置 contextValue 供右键菜单 when 过滤 */
+  /** 仅根层级登记的文件夹/文件为 true，用于设置 contextValue 供右键菜单 when 过滤 */
   readonly managed?: true;
 }
 
@@ -37,23 +37,23 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
 
   // 后执行
   getTreeItem(element: Entry): vscode.TreeItem {
-    // 空列表占位项，点击即添加文件夹
+    // 空列表占位项，点击即添加文件夹/文件
     if (element.kind === 'placeholder') {
       const item = new vscode.TreeItem(
-        vscode.l10n.t('No folders added yet. Click to add one.'),
+        vscode.l10n.t('No items added yet. Click to add one.'),
         vscode.TreeItemCollapsibleState.None
       );
       item.iconPath = new vscode.ThemeIcon('add');
-      item.command = ADD_FOLDER_COMMAND.treeItemCommand(
-        vscode.l10n.t('Add Folder')
+      item.command = ADD_ITEM_COMMAND.treeItemCommand(
+        vscode.l10n.t('Add')
       );
       return item;
     }
 
-    // 失效占位项：登记的目录在磁盘上不存在
+    // 失效占位项：登记的文件夹/文件在磁盘上不存在
     if (element.kind === 'missing') {
       const item = new vscode.TreeItem(
-        vscode.l10n.t('Folder is missing on disk'),
+        vscode.l10n.t('Item is missing on disk'),
         vscode.TreeItemCollapsibleState.None
       );
       item.iconPath = new vscode.ThemeIcon('warning');
@@ -74,10 +74,11 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
       );
     }
 
-    // 仅根层级登记的文件夹标记 contextValue（与 package.json 的 when 子句对应）。
-    // 打开操作由条目右侧的 inline 图标触发（view/item/context inline group），不绑定行单击命令
+    // 仅根层级登记的条目标记 contextValue（与 package.json 的 when 子句对应）：
+    // 文件夹为 folders.folder（inline 打开项目按钮），文件为 folders.file（单击已绑定打开）。
+    // 打开文件夹操作由条目右侧的 inline 图标触发（view/item/context inline group），不绑定行单击命令
     if (element.managed) {
-      item.contextValue = 'folders.folder';
+      item.contextValue = isDirectory ? 'folders.folder' : 'folders.file';
     }
 
     return item;
@@ -85,19 +86,28 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
 
   // 先执行
   async getChildren(element?: Entry): Promise<Entry[]> {
-    // 根层级：返回 JSON 中登记的文件夹；为空时给出占位提示
+    // 根层级：返回 JSON 中登记的文件夹/文件；为空时给出占位提示
     if (!element) {
-      const folders = await this.folderStore.getAll();
-      if (folders.length === 0) {
+      const items = await this.folderStore.getAll();
+      if (items.length === 0) {
         return [{ kind: 'placeholder' }];
       }
-      return folders.map((uri): Entry => ({
-        kind: 'node',
-        uri,
-        type: vscode.FileType.Directory,
-        managed: true,
+
+      // stat 判定文件/目录类型；失效条目按目录兜底，展开时由 readDirectory 的失效处理展示占位项
+      return Promise.all(items.map(async (uri): Promise<Entry> => {
+        let type = vscode.FileType.Directory;
+        try {
+          const stat = await vscode.workspace.fs.stat(uri);
+          type = (stat.type & vscode.FileType.Directory) !== 0
+            ? vscode.FileType.Directory
+            : vscode.FileType.File;
+        } catch {
+          // stat 失败（已删除/移动）时按目录兜底，保持与既有失效文件夹一致的展示
+        }
+        return { kind: 'node', uri, type, managed: true };
       }));
     }
+
     if (element.kind === 'placeholder' || element.kind === 'missing') {
       return [];
     }

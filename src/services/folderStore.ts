@@ -5,7 +5,7 @@ interface FolderStoreData {
   folders?: string[];
 }
 
-/** 以独立的 JSON 文件持久化用户添加的文件夹列表。 */
+/** 以独立的 JSON 文件持久化用户添加的文件夹/文件列表。 */
 export class FolderStore implements vscode.Disposable {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChange = this._onDidChange.event;
@@ -54,7 +54,7 @@ export class FolderStore implements vscode.Disposable {
     }
   }
 
-  /** 获取全部文件夹，首次调用时从 JSON 文件加载。 */
+  /** 获取全部登记条目（文件夹/文件），首次调用时从 JSON 文件加载。 */
   async getAll(): Promise<vscode.Uri[]> {
     if (!this.cache) {
       this.cache = await this.read();
@@ -62,7 +62,7 @@ export class FolderStore implements vscode.Disposable {
     return [...this.cache];
   }
 
-  /** 新增文件夹（按路径去重），成功后触发 onDidChange。 */
+  /** 新增条目（文件夹/文件，按路径去重），成功后触发 onDidChange。 */
   async add(uris: readonly vscode.Uri[]): Promise<{ added: number; skipped: number }> {
     const existing = await this.getAll();
     const known = new Set(existing.map((uri) => uri.fsPath));

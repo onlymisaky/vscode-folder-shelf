@@ -29,8 +29,8 @@
         "title": "%folderShelf.openFile.title%"
       },
       {
-        "command": "folderShelf.addFolder",
-        "title": "%folderShelf.addFolder.title%",
+        "command": "folderShelf.addItem",
+        "title": "%folderShelf.addItem.title%",
         "icon": "$(new-folder)"
       },
       {
@@ -59,8 +59,8 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "folderShelf.removeFolder",
-        "title": "%folderShelf.removeFolder.title%"
+        "command": "folderShelf.removeItem",
+        "title": "%folderShelf.removeItem.title%"
       }
     ],
     "menus": {
@@ -74,13 +74,13 @@
           "when": "false"
         },
         {
-          "command": "folderShelf.removeFolder",
+          "command": "folderShelf.removeItem",
           "when": "false"
         }
       ],
       "view/title": [
         {
-          "command": "folderShelf.addFolder",
+          "command": "folderShelf.addItem",
           "when": "view == folderShelf.views.folders",
           "group": "navigation"
         },
@@ -112,8 +112,8 @@
           "group": "inline"
         },
         {
-          "command": "folderShelf.removeFolder",
-          "when": "view == folderShelf.views.folders && viewItem == folders.folder",
+          "command": "folderShelf.removeItem",
+          "when": "view == folderShelf.views.folders && (viewItem == folders.folder || viewItem == folders.file)",
           "group": "9_folderShelf"
         }
       ]

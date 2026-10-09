@@ -5,7 +5,7 @@ import { FolderStore } from '../services/folderStore';
 import { inject } from '../services/container';
 import type { Entry, NodeEntry } from '../treeViews/foldersProvider';
 
-/** 加入列表并提示被跳过的重复项（addFolder 与「添加当前项目」共用）。 */
+/** 加入列表并提示被跳过的重复项（addItem 与「添加当前项目」共用）。 */
 async function addAndReportSkipped(
   folderStore: FolderStore,
   uris: readonly vscode.Uri[]
@@ -13,20 +13,20 @@ async function addAndReportSkipped(
   const { skipped } = await folderStore.add(uris);
   if (skipped > 0) {
     await vscode.window.showInformationMessage(
-      vscode.l10n.t('{0} folder(s) already in the list and were skipped.', skipped)
+      vscode.l10n.t('{0} item(s) already in the list and were skipped.', skipped)
     );
   }
 }
 
-export const ADD_FOLDER_COMMAND = defineCommand('folderShelf.addFolder', async () => {
+export const ADD_ITEM_COMMAND = defineCommand('folderShelf.addItem', async () => {
   const folderStore = inject(FolderStore);
 
   const uris = await vscode.window.showOpenDialog({
-    canSelectFiles: false,
+    canSelectFiles: true,
     canSelectFolders: true,
     canSelectMany: true,
-    openLabel: vscode.l10n.t('Add Folder'),
-    title: vscode.l10n.t('Select Folders to Add'),
+    openLabel: vscode.l10n.t('Add'),
+    title: vscode.l10n.t('Select Items to Add'),
   });
 
   if (!uris || uris.length === 0) {
@@ -108,11 +108,11 @@ function collectManagedUris(item?: Entry, selectedItems?: readonly Entry[]): vsc
 }
 
 /**
- * 移除文件夹：从树条目右键菜单触发，仅从列表移除（不影响磁盘文件）。
+ * 移除登记的文件夹/文件：从树条目右键菜单触发，仅从列表移除（不影响磁盘文件）。
  * 目标从菜单回传参数解析（多选时 VSCode 回传 (item, selectedItems)）。
  */
-export const REMOVE_FOLDER_COMMAND = defineCommand(
-  'folderShelf.removeFolder',
+export const REMOVE_ITEM_COMMAND = defineCommand(
+  'folderShelf.removeItem',
   async (item?: Entry, selectedItems?: readonly Entry[]): Promise<void> => {
     const folderStore = inject(FolderStore);
 
@@ -130,7 +130,7 @@ export const REMOVE_FOLDER_COMMAND = defineCommand(
           names[0]
         )
         : vscode.l10n.t(
-          'Remove {0} folders ({1}) from the list? Files on disk will not be affected.',
+          'Remove {0} item(s) ({1}) from the list? Files on disk will not be affected.',
           names.length,
           names.join(', ')
         );

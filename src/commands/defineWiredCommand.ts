@@ -13,8 +13,8 @@ export interface WiredCommandDefinition<Id extends CommandId, Deps, Args extends
  * 适合需要依赖，但是依赖不来自 service
  * @example
  * ```ts
-  const REMOVE_FOLDER_COMMAND_WIRED = defineWiredCommand(
-    'folderShelf.removeFolder',
+  const REMOVE_ITEM_COMMAND_WIRED = defineWiredCommand(
+    'folderShelf.removeItem',
     (deps: { foldersView: vscode.TreeView<Entry> }) => {
       const { foldersView } = deps;
       return async function (): Promise<void> {
@@ -50,7 +50,7 @@ export interface WiredCommandDefinition<Id extends CommandId, Deps, Args extends
     }
   );
 
-  REMOVE_FOLDER_COMMAND_WIRED.wire({ foldersView });
+  REMOVE_ITEM_COMMAND_WIRED.wire({ foldersView });
  * ```
  * @param id 命令 ID
  * @param setup 组合根传入依赖，返回 callback 已绑定的标准 CommandDefinition
