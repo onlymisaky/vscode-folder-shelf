@@ -44,8 +44,8 @@
         "icon": "$(open-in-product)"
       },
       {
-        "command": "folderShelf.openFoldersFile",
-        "title": "%folderShelf.openFoldersFile.title%",
+        "command": "folderShelf.openConfigFile",
+        "title": "%folderShelf.openConfigFile.title%",
         "icon": "$(json)"
       },
       {
@@ -90,7 +90,7 @@
           "group": "navigation"
         },
         {
-          "command": "folderShelf.openFoldersFile",
+          "command": "folderShelf.openConfigFile",
           "when": "view == folderShelf.views.folders",
           "group": "navigation"
         },
@@ -122,10 +122,10 @@
       {
         "title": "%folderShelf.container.title%",
         "properties": {
-          "folderShelf.foldersFile": {
+          "folderShelf.configFile": {
             "type": "string",
             "default": "",
-            "markdownDescription": "%folderShelf.foldersFile.description%",
+            "markdownDescription": "%folderShelf.configFile.description%",
             "scope": "application"
           }
         }
