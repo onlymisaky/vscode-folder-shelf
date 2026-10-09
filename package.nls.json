@@ -10,5 +10,5 @@
   "folderShelf.openConfigFile.title": "Open Config File",
   "folderShelf.collapseAll.title": "Collapse All",
   "folderShelf.refresh.title": "Reload List",
-  "folderShelf.configFile.description": "Absolute path of the JSON file that stores the item list (e.g. `/Users/me/sync/folders.json`). `~` expands to the home directory. Leave empty to use `~/.folder-shelf/folders.json` (default), falling back to the extension's global storage if unavailable."
+  "folderShelf.configFile.description": "Absolute path of the JSON file that stores the item list (e.g. `/Users/me/sync/config.json`). `~` expands to the home directory. Leave empty to use `~/.folder-shelf/config.json` (default), falling back to the extension's global storage if unavailable."
 }

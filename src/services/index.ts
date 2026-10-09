@@ -7,19 +7,11 @@ import { provide } from './container';
 const SECTION = 'folderShelf';
 const SETTING_CONFIG_FILE = 'configFile';
 const DEFAULT_DIR_NAME = '.folder-shelf';
+const DEFAULT_FILE_NAME = 'config.json';
 
-async function fileExists(uri: vscode.Uri): Promise<boolean> {
-  try {
-    await vscode.workspace.fs.stat(uri);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** 解析 folders.json 的实际位置：
+/** 解析收藏列表配置文件的实际位置：
  *  设置了 configFile 则用之（支持 ~ 指向主目录）；
- *  未设置时优先 ~/.folder-shelf/folders.json，
+ *  未设置时优先 ~/.folder-shelf/config.json，
  *  用户目录不可用再降级 globalStorage。
  */
 async function resolveConfigFile(context: vscode.ExtensionContext): Promise<vscode.Uri> {
@@ -28,24 +20,15 @@ async function resolveConfigFile(context: vscode.ExtensionContext): Promise<vsco
     .get<string>(SETTING_CONFIG_FILE)
     ?.trim();
   if (!raw) {
-    const globalFile = vscode.Uri.joinPath(context.globalStorageUri, 'folders.json');
     const homeDir = vscode.Uri.file(path.join(os.homedir(), DEFAULT_DIR_NAME));
-    const homeFile = vscode.Uri.joinPath(homeDir, 'folders.json');
+    const globalFile = vscode.Uri.joinPath(context.globalStorageUri, DEFAULT_FILE_NAME);
+    const homeFile = vscode.Uri.joinPath(homeDir, DEFAULT_FILE_NAME);
 
-    // 优先 ~/.folder-shelf/folders.json（用户目录不可用时降级 globalStorage）
+    // 优先 ~/.folder-shelf/config.json（用户目录不可用时降级 globalStorage）
     try {
       await vscode.workspace.fs.createDirectory(homeDir);
     } catch {
       return globalFile; // 用户目录不可用，降级
-    }
-
-    // home 侧尚无文件而 globalStorage 有旧数据时，自动迁移一份过来。
-    try {
-      if (!(await fileExists(homeFile)) && (await fileExists(globalFile))) {
-        await vscode.workspace.fs.copy(globalFile, homeFile, { overwrite: false });
-      }
-    } catch {
-      // 迁移失败不阻塞使用，继续用用户目录
     }
 
     return homeFile;

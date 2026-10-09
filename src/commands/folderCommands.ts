@@ -61,7 +61,7 @@ export const ADD_CURRENT_PROJECT_COMMAND = defineCommand(
 );
 
 /**
- * 重新加载 folders.json：文件可能在外部被修改，丢弃缓存并触发视图刷新。
+ * 重新加载 config.json：文件可能在外部被修改，丢弃缓存并触发视图刷新。
  */
 export const REFRESH_COMMAND = defineCommand('folderShelf.refresh', () => {
   inject(FolderStore).refresh();

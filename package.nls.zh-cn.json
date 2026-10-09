@@ -10,5 +10,5 @@
   "folderShelf.openConfigFile.title": "打开配置文件",
   "folderShelf.collapseAll.title": "全部折叠",
   "folderShelf.refresh.title": "重新加载列表",
-  "folderShelf.configFile.description": "存储条目列表的 JSON 配置文件的绝对路径（如 `/Users/me/sync/folders.json`），支持 `~` 表示用户主目录；留空时默认使用 `~/.folder-shelf/folders.json`（不可用时降级为扩展全局存储）。"
+  "folderShelf.configFile.description": "存储条目列表的 JSON 配置文件的绝对路径（如 `/Users/me/sync/config.json`），支持 `~` 表示用户主目录；留空时默认使用 `~/.folder-shelf/config.json`（不可用时降级为扩展全局存储）。"
 }

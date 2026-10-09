@@ -9,7 +9,7 @@ export const OPEN_FILE_COMMAND = defineCommand('folderShelf.openFile', async (ur
   await vscode.commands.executeCommand('vscode.open', uri, { preview: true })
 })
 
-/** 打开 folders.json 文件，不存在时先创建空骨架。 */
+/** 打开 config.json 文件，不存在时先创建空骨架。 */
 export const OPEN_CONFIG_FILE_COMMAND = defineCommand(
   'folderShelf.openConfigFile',
   async (): Promise<void> => {

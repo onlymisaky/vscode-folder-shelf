@@ -1,8 +1,14 @@
 import * as vscode from 'vscode';
 
-/** folders.json 的数据结构 */
-interface FolderStoreData {
-  folders?: string[];
+/** config.json 的数据结构 */
+interface ConfigFileData {
+  items?: StoredItem[];
+}
+
+/** 单个收藏条目：对象结构便于后期扩展字段（如置顶、备注） */
+interface StoredItem {
+  /** 条目绝对路径 */
+  path: string;
 }
 
 /** 以独立的 JSON 文件持久化用户添加的文件夹/文件列表。 */
@@ -14,7 +20,7 @@ export class FolderStore implements vscode.Disposable {
   private storageDir: vscode.Uri;
   private cache: vscode.Uri[] | undefined;
 
-  /** @param fileUri folders.json 的完整文件路径 */
+  /** @param fileUri config.json 的完整文件路径 */
   constructor(fileUri: vscode.Uri) {
     this.fileUri = fileUri;
     this.storageDir = vscode.Uri.joinPath(fileUri, '..');
@@ -117,13 +123,13 @@ export class FolderStore implements vscode.Disposable {
       throw error;
     }
 
-    const data = JSON.parse(new TextDecoder().decode(content)) as FolderStoreData;
-    return (data.folders ?? []).map((path) => vscode.Uri.file(path));
+    const data = JSON.parse(new TextDecoder().decode(content)) as ConfigFileData;
+    return (data.items ?? []).map((item) => vscode.Uri.file(item.path));
   }
 
-  private async save(folders: readonly vscode.Uri[]): Promise<void> {
+  private async save(items: readonly vscode.Uri[]): Promise<void> {
     await vscode.workspace.fs.createDirectory(this.storageDir);
-    const data: FolderStoreData = { folders: folders.map((uri) => uri.fsPath) };
+    const data: ConfigFileData = { items: items.map((uri) => ({ path: uri.fsPath })) };
     await vscode.workspace.fs.writeFile(
       this.fileUri,
       new TextEncoder().encode(JSON.stringify(data, null, 2))
