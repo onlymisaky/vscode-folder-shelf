@@ -154,7 +154,28 @@ async function checkFolderExistAndRemoveNotFound(uri: vscode.Uri, folderStore: F
   }
 }
 
-/** 打开前检查磁盘状态（失效时引导移除），随后 QuickPick 选择打开方式（当前窗口 / 新窗口 / 追加到当前工作区）。 */
+/**
+ * 系统文件管理器「定位 / 打开」两项标签，按平台区分命名：
+ * macOS 为 Finder，Windows 为文件资源管理器，Linux 无统一名称泛称文件管理器。
+ * 各分支均为静态字面量，保证 l10n 提取完整。
+ */
+function fileManagerLabels(): { reveal: string; open: string } {
+  if (process.platform === 'darwin') {
+    return { reveal: vscode.l10n.t('Reveal in Finder'), open: vscode.l10n.t('Open in Finder') };
+  }
+  if (process.platform === 'win32') {
+    return {
+      reveal: vscode.l10n.t('Reveal in File Explorer'),
+      open: vscode.l10n.t('Open in File Explorer'),
+    };
+  }
+  return {
+    reveal: vscode.l10n.t('Reveal in File Manager'),
+    open: vscode.l10n.t('Open in File Manager'),
+  };
+}
+
+/** 打开前检查磁盘状态（失效时引导移除），随后 QuickPick 选择打开方式（当前窗口 / 新窗口 / 终端 / 调试终端 / 文件管理器 / 工作区）。 */
 async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): Promise<void> {
   if (!await checkFolderExistAndRemoveNotFound(uri, folderStore)) {
     return;
@@ -173,7 +194,39 @@ async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): P
     iconPath: new vscode.ThemeIcon('empty-window'),
   };
 
-  const items: vscode.QuickPickItem[] = [CURRENT, NEW_WINDOW];
+  // 在 VSCode 集成终端中打开
+  const TERMINAL: vscode.QuickPickItem = {
+    label: vscode.l10n.t('Open in Terminal'),
+    iconPath: new vscode.ThemeIcon('terminal'),
+  };
+
+  // 在调试终端（JavaScript Debug Terminal）中打开
+  const DEBUG_TERMINAL: vscode.QuickPickItem = {
+    label: vscode.l10n.t('Open in Debug Terminal'),
+    iconPath: new vscode.ThemeIcon('debug'),
+  };
+
+  // 在系统文件管理器中定位：打开父级目录并选中该文件夹
+  const { reveal: REVEAL_LABEL, open: OPEN_LABEL } = fileManagerLabels();
+  const REVEAL_IN_FILE_MANAGER: vscode.QuickPickItem = {
+    label: REVEAL_LABEL,
+    iconPath: new vscode.ThemeIcon('folder-opened'),
+  };
+
+  // 在系统文件管理器中直接打开该文件夹
+  const OPEN_IN_FILE_MANAGER: vscode.QuickPickItem = {
+    label: OPEN_LABEL,
+    iconPath: new vscode.ThemeIcon('link-external'),
+  };
+
+  const items: vscode.QuickPickItem[] = [
+    CURRENT,
+    NEW_WINDOW,
+    TERMINAL,
+    DEBUG_TERMINAL,
+    REVEAL_IN_FILE_MANAGER,
+    OPEN_IN_FILE_MANAGER,
+  ];
 
   // 添加到当前工作区
   // 暂不开放该功能
@@ -197,15 +250,46 @@ async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): P
 
   if ([CURRENT, NEW_WINDOW].includes(choice)) {
     await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: choice === NEW_WINDOW });
-  } else {
-    // 追加为当前工作区的工作区文件夹（多根工作区）
-    const start = vscode.workspace.workspaceFolders?.length ?? 0;
-    const updated = vscode.workspace.updateWorkspaceFolders(start, 0, { uri });
-    if (!updated) {
-      await vscode.window.showErrorMessage(
-        vscode.l10n.t('Failed to add "{0}" to the workspace.', pathName)
-      );
-    }
+    return;
+  }
+
+  if (choice === TERMINAL) {
+    const terminal = vscode.window.createTerminal({
+      name: path.basename(uri.fsPath),
+      cwd: uri.fsPath,
+    });
+    terminal.show();
+    return;
+  }
+
+  if (choice === DEBUG_TERMINAL) {
+    // js-debug 内置命令，参数形态与其内部目录选择流程一致：第三参传 { cwd }
+    await vscode.commands.executeCommand(
+      'extension.js-debug.createDebuggerTerminal',
+      undefined,
+      undefined,
+      { cwd: uri.fsPath }
+    );
+    return;
+  }
+
+  if (choice === REVEAL_IN_FILE_MANAGER) {
+    await vscode.commands.executeCommand('revealFileInOS', uri);
+    return;
+  }
+
+  if (choice === OPEN_IN_FILE_MANAGER) {
+    await vscode.env.openExternal(uri);
+    return;
+  }
+
+  // 追加为当前工作区的工作区文件夹（多根工作区）
+  const start = vscode.workspace.workspaceFolders?.length ?? 0;
+  const updated = vscode.workspace.updateWorkspaceFolders(start, 0, { uri });
+  if (!updated) {
+    await vscode.window.showErrorMessage(
+      vscode.l10n.t('Failed to add "{0}" to the workspace.', pathName)
+    );
   }
 }
 
