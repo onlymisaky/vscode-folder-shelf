@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { FolderStore } from './folderStore';
+import { ViewModeStore } from './viewModeStore';
 import { provide } from './container';
 
 const SECTION = 'folderShelf';
@@ -42,6 +43,7 @@ async function resolveConfigFile(context: vscode.ExtensionContext): Promise<vsco
 
 export async function registerServices(context: vscode.ExtensionContext): Promise<vscode.Disposable[]> {
   const folderStore = new FolderStore(await resolveConfigFile(context));
+  const viewModeStore = new ViewModeStore(context.globalState);
 
   // 解析为异步且探测期间设置可能再次变更：用递增 ticket 保证只有最新一次的解析结果生效
   let resolution = 0;
@@ -59,5 +61,6 @@ export async function registerServices(context: vscode.ExtensionContext): Promis
   });
 
   provide(FolderStore, folderStore);
-  return [folderStore, configWatcher];
+  provide(ViewModeStore, viewModeStore);
+  return [folderStore, viewModeStore, configWatcher];
 }

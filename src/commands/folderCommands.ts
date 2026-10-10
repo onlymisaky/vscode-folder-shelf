@@ -3,7 +3,8 @@ import * as path from 'node:path';
 import { defineCommand } from './defineCommand';
 import { FolderStore } from '../services/folderStore';
 import { inject } from '../services/container';
-import type { Entry, NodeEntry } from '../treeViews/foldersProvider';
+import { isManagedEntry } from '../treeViews/foldersProvider/entries';
+import type { Entry } from '../treeViews/foldersProvider/entries';
 
 /** 加入列表并提示被跳过的重复项（addItem 与「添加当前项目」共用）。 */
 async function addAndReportSkipped(
@@ -79,25 +80,11 @@ export const COLLAPSE_ALL_COMMAND = defineCommand('folderShelf.collapseAll', asy
 });
 
 /**
- * 判断菜单/inline 回传参数是否为登记的根文件夹元素。
- * 实测（Trae CN，VSCode 分支同源）：view/item/context 与 inline 菜单回传的是
- * getChildren 返回的元素本身（Entry），而非 TreeItem，故直接按类型收窄。
- */
-function isManagedEntry(value: unknown): value is NodeEntry {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as NodeEntry).kind === 'node' &&
-    (value as NodeEntry).managed === true
-  );
-}
-
-/**
  * 从菜单/inline 图标回传的参数解析目标（登记的根文件夹），按 fsPath 去重。
  * 实测：回传的是 getChildren 返回的元素本身（Entry），而非 TreeItem；
  * 多选时第二参数为 selection 数组。两个命令均仅从菜单触发，参数恒有值。
  */
-function collectManagedUris(item?: Entry, selectedItems?: readonly Entry[]): vscode.Uri[] {
+export function collectManagedUris(item?: Entry, selectedItems?: readonly Entry[]): vscode.Uri[] {
   const uris = new Map<string, vscode.Uri>();
   for (const raw of [item, ...(selectedItems ?? [])]) {
     if (isManagedEntry(raw)) {

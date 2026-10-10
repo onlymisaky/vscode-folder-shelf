@@ -61,6 +61,38 @@
       {
         "command": "folderShelf.removeItem",
         "title": "%folderShelf.removeItem.title%"
+      },
+      {
+        "command": "folderShelf.showGrouped",
+        "title": "%folderShelf.showGrouped.title%",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "folderShelf.showFlat",
+        "title": "%folderShelf.showFlat.title%",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "folderShelf.moveToGroup",
+        "title": "%folderShelf.moveToGroup.title%"
+      },
+      {
+        "command": "folderShelf.moveOutOfGroup",
+        "title": "%folderShelf.moveOutOfGroup.title%"
+      },
+      {
+        "command": "folderShelf.renameGroup",
+        "title": "%folderShelf.renameGroup.title%"
+      },
+      {
+        "command": "folderShelf.dissolveGroup",
+        "title": "%folderShelf.dissolveGroup.title%"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "folderShelf.group",
+        "label": "%folderShelf.submenu.group%"
       }
     ],
     "menus": {
@@ -76,45 +108,111 @@
         {
           "command": "folderShelf.removeItem",
           "when": "false"
+        },
+        {
+          "command": "folderShelf.showGrouped",
+          "when": "!folderShelf.groupedView"
+        },
+        {
+          "command": "folderShelf.showFlat",
+          "when": "folderShelf.groupedView"
+        },
+        {
+          "command": "folderShelf.moveToGroup",
+          "when": "false"
+        },
+        {
+          "command": "folderShelf.moveOutOfGroup",
+          "when": "false"
+        },
+        {
+          "command": "folderShelf.renameGroup",
+          "when": "false"
+        },
+        {
+          "command": "folderShelf.dissolveGroup",
+          "when": "false"
         }
       ],
       "view/title": [
         {
           "command": "folderShelf.addItem",
           "when": "view == folderShelf.views.folders",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "folderShelf.addCurrentProject",
           "when": "view == folderShelf.views.folders",
-          "group": "navigation"
-        },
-        {
-          "command": "folderShelf.openConfigFile",
-          "when": "view == folderShelf.views.folders",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "folderShelf.collapseAll",
           "when": "view == folderShelf.views.folders",
-          "group": "navigation"
+          "group": "navigation@3"
+        },
+        {
+          "command": "folderShelf.showGrouped",
+          "when": "view == folderShelf.views.folders && !folderShelf.groupedView",
+          "group": "navigation@4"
+        },
+        {
+          "command": "folderShelf.showFlat",
+          "when": "view == folderShelf.views.folders && folderShelf.groupedView",
+          "group": "navigation@4"
+        },
+        {
+          "command": "folderShelf.openConfigFile",
+          "when": "view == folderShelf.views.folders",
+          "group": "navigation@5"
         },
         {
           "command": "folderShelf.refresh",
           "when": "view == folderShelf.views.folders",
-          "group": "navigation"
+          "group": "navigation@6"
         }
       ],
       "view/item/context": [
         {
           "command": "folderShelf.openFolder",
-          "when": "view == folderShelf.views.folders && viewItem == folders.folder",
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.folder/",
           "group": "inline"
         },
         {
+          "command": "folderShelf.moveToGroup",
+          "when": "view == folderShelf.views.folders && (viewItem =~ /^folders\\.(folder|file)$/ || (folderShelf.selectionMixed && viewItem =~ /^folders\\.(folder|file)(\\.grouped)?$/))",
+          "group": "9_folderShelf@1"
+        },
+        {
+          "submenu": "folderShelf.group",
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped$/ && !folderShelf.selectionMixed",
+          "group": "9_folderShelf@1"
+        },
+        {
           "command": "folderShelf.removeItem",
-          "when": "view == folderShelf.views.folders && (viewItem == folders.folder || viewItem == folders.file)",
-          "group": "9_folderShelf"
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)/",
+          "group": "9_folderShelf@2"
+        },
+        {
+          "command": "folderShelf.renameGroup",
+          "when": "view == folderShelf.views.folders && viewItem == folders.group",
+          "group": "9_folderShelf@1"
+        },
+        {
+          "command": "folderShelf.dissolveGroup",
+          "when": "view == folderShelf.views.folders && viewItem == folders.group",
+          "group": "9_folderShelf@2"
+        }
+      ],
+      "folderShelf.group": [
+        {
+          "command": "folderShelf.moveToGroup",
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped$/",
+          "group": "1_folderShelf@1"
+        },
+        {
+          "command": "folderShelf.moveOutOfGroup",
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped$/",
+          "group": "1_folderShelf@2"
         }
       ]
     },

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { OPEN_FILE_COMMAND, OPEN_CONFIG_FILE_COMMAND } from './fileCommands';
 import { ADD_CURRENT_PROJECT_COMMAND, ADD_ITEM_COMMAND, COLLAPSE_ALL_COMMAND, OPEN_FOLDER_COMMAND, REFRESH_COMMAND, REMOVE_ITEM_COMMAND } from './folderCommands';
+import { DISSOLVE_GROUP_COMMAND, MOVE_OUT_OF_GROUP_COMMAND, MOVE_TO_GROUP_COMMAND, RENAME_GROUP_COMMAND, SHOW_FLAT_COMMAND, SHOW_GROUPED_COMMAND } from './groupCommands';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function registerCommands(_deps: unknown): vscode.Disposable[] {
@@ -13,6 +14,12 @@ export function registerCommands(_deps: unknown): vscode.Disposable[] {
     REMOVE_ITEM_COMMAND,
     COLLAPSE_ALL_COMMAND,
     REFRESH_COMMAND,
+    SHOW_GROUPED_COMMAND,
+    SHOW_FLAT_COMMAND,
+    MOVE_TO_GROUP_COMMAND,
+    MOVE_OUT_OF_GROUP_COMMAND,
+    RENAME_GROUP_COMMAND,
+    DISSOLVE_GROUP_COMMAND,
     // REMOVE_ITEM_COMMAND_WIRED.wire(deps),
   ];
 
@@ -30,4 +37,10 @@ export {
   REMOVE_ITEM_COMMAND,
   COLLAPSE_ALL_COMMAND,
   REFRESH_COMMAND,
+  SHOW_GROUPED_COMMAND,
+  SHOW_FLAT_COMMAND,
+  MOVE_TO_GROUP_COMMAND,
+  MOVE_OUT_OF_GROUP_COMMAND,
+  RENAME_GROUP_COMMAND,
+  DISSOLVE_GROUP_COMMAND,
 };
