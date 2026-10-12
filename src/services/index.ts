@@ -5,15 +5,23 @@ import { FolderStore } from './folderStore';
 import { ViewModeStore } from './viewModeStore';
 import { provide } from './container';
 
+/** 设置段（package.json contributes.configuration 的前缀） */
 const SECTION = 'folderShelf';
+/** 配置项键名：收藏列表持久化文件的自定义路径（空串 = 使用默认位置） */
 const SETTING_CONFIG_FILE = 'configFile';
+/** 默认持久化目录名：用户主目录下的隐藏目录 */
 const DEFAULT_DIR_NAME = '.folder-shelf';
+/** 默认持久化文件名 */
 const DEFAULT_FILE_NAME = 'config.json';
 
-/** 解析收藏列表配置文件的实际位置：
- *  设置了 configFile 则用之（支持 ~ 指向主目录）；
- *  未设置时优先 ~/.folder-shelf/config.json，
- *  用户目录不可用再降级 globalStorage。
+/**
+ * 解析收藏列表配置文件的实际位置：
+ * 设置了 configFile 则用之（支持 ~ 指向主目录）；
+ * 未设置时优先 ~/.folder-shelf/config.json，
+ * 用户目录不可用再降级 globalStorage。
+ *
+ * @param context - 扩展上下文（提供 globalStorage 目录）
+ * @returns 配置文件的绝对 Uri（文件此刻可能尚不存在，由 FolderStore 读侧兜底为空列表）
  */
 async function resolveConfigFile(context: vscode.ExtensionContext): Promise<vscode.Uri> {
   const raw = vscode.workspace
@@ -35,12 +43,19 @@ async function resolveConfigFile(context: vscode.ExtensionContext): Promise<vsco
     return homeFile;
   }
 
+  // 展开 ~ 为用户主目录（仅支持前缀形态：~ 与 ~/...）
   const expanded = raw === '~' || raw.startsWith('~/')
     ? os.homedir() + raw.slice(1)
     : raw;
   return vscode.Uri.file(expanded);
 }
 
+/**
+ * 组合根：实例化全部服务并注册进容器，同时挂接 configFile 设置变更监听。
+ *
+ * @param context - 扩展上下文（提供 globalStorage 与设置读取）
+ * @returns 需纳入 context.subscriptions 的可释放对象列表（两个服务实例 + 设置监听器）
+ */
 export async function registerServices(context: vscode.ExtensionContext): Promise<vscode.Disposable[]> {
   const folderStore = new FolderStore(await resolveConfigFile(context));
   const viewModeStore = new ViewModeStore(context.globalState);

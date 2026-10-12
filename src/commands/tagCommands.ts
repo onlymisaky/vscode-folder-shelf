@@ -12,23 +12,31 @@ import { confirmDanger, renameViaInputBox } from '../utils';
 const DIMMED_ICON_COLOR = new vscode.ThemeColor('descriptionForeground');
 
 /**
- * 行对象：tagName 承载真实标签名（未命中弱化行的名字在 description 中，不能靠 label 取名）。
+ * 标签选择器的行对象：在 QuickPickItem 基础上挂真实标签名，
+ * 未命中弱化行的名字在 description 中，不能靠 label 取名。
  */
-type TagPickItem = vscode.QuickPickItem & { readonly tagName: string };
+type TagPickItem = vscode.QuickPickItem & {
+  /** 行对应的真实标签名；创建项固定为空串（名字尚未生效，靠对象同一性单独识别） */
+  readonly tagName: string;
+};
+
+/** 标签选择器中根据输入动态生成的创建项。 */
+interface PendingTagCreation {
+  /** 已去除首尾空白、等待创建的标签名 */
+  readonly name: string;
+  /** 显示在选择器首行的创建动作 */
+  readonly item: TagPickItem;
+}
 
 /**
- * 标签选择 QuickPick（多选复选框）：现有标签按首次出现顺序列出并预勾选当前集合，
- * 输入不存在的标签名时在最上方动态提供创建项（label 即输入词，精确匹配得分恒最高从而钉在首位），
- * 内置过滤已无法从扩展侧关闭（matchOnLabel 已随扩展 API 移除，扩展宿主不再传输该属性），
- * 改用 alwaysShow 让全部行在键入时保持可见：命中标签前置（运行时自动加粗命中片段），
- * 未命中标签后置弱化（名字移入 description 呈灰字 + 灰图标），全部行恒定可勾选、徽标恒准确。
- * 勾选状态以本地 Set 为唯一状态源（VSCode 重挂 items 会丢失复选框状态，且用户勾选不会回写
- * item 对象；item.picked 仅 showQuickPick 生效，createQuickPick 不读它），每次重挂 items 后
- * 经 selectedItems 恢复勾选，onDidChangeSelection 同步回 Set。
- * 勾选创建项后回车 = 创建该标签并继续：新标签即时入列并勾选、输入框清空、对话框保持打开，
- * 可连续创建多个；创建项不在勾选态（或不存在）时回车 = 确认收尾。全程均为草稿，仅最终确认
- * 才返回结果写入，Esc 全部放弃。
- * 返回确认的标签集合（空数组 = 清除全部标签）；Esc 取消返回 undefined。
+ * 显示支持创建标签的多选 QuickPick。现有标签按首次出现顺序排列并恢复当前勾选状态；
+ * 输入新名称时提供创建项，创建后可继续选择。选择过程只维护本地草稿，确认时返回完整标签集，
+ * 取消时不产生任何写操作。
+ *
+ * @param existingTags - 现有标签全集（按首次出现顺序），作为初始列表
+ * @param currentTags - 预勾选集合（各目标条目标签的并集）
+ * @param title - 对话框标题（须为已翻译文案）
+ * @returns 确认的标签集合（空数组 = 清除全部标签）；Esc 取消返回 undefined
  */
 function pickTags(
   existingTags: readonly string[],
@@ -48,13 +56,17 @@ function pickTags(
   // 可增长的标签全集：连续创建的新标签即时入列（初始为打开时的全部现有标签）
   const knownTags = [...existingTags];
   // 待创建项：键入 trim 后非空且不是现有标签名时存在，label 含输入值以便辨识
-  let pendingCreate: { name: string; item: TagPickItem } | undefined;
+  let pendingCreate: PendingTagCreation | undefined;
   // 正在重挂 items：重挂引发的选中事件与本地状态一致，忽略以免回环
   let remounting = false;
 
-  // 重挂 items：创建项（若有）→ 命中标签 → 未命中标签（灰字灰图标弱化），组内保持首次出现顺序。
-  // 全部行 alwaysShow：内置过滤无法关闭（matchOnLabel 已随扩展 API 移除，扩展宿主不再传输该属性），
-  // alwaysShow 使未命中行不被隐藏、保持可勾选；命中行的命中片段由运行时过滤自动加粗高亮
+  /**
+   * 根据查询词重建标签行，并恢复由本地集合维护的勾选状态。
+   * 创建项在前，其后依次为命中标签和弱化的未命中标签；组内保持首次出现顺序。
+   * 全部行使用 alwaysShow，因为扩展 API 已无法关闭内置过滤；命中片段由运行时自动高亮。
+   *
+   * @param query - 当前搜索文本；调用前已由输入事件统一去除首尾空白
+   */
   const render = (query: string): void => {
     const lowerQuery = query.toLowerCase();
     const matched: TagPickItem[] = [];
@@ -163,6 +175,10 @@ function pickTags(
  * 标签命令共享流程：解析目标（支持多选）→ 以各条目标签的并集预勾选 → 多选 QuickPick
  * （添加标签与管理标签界面完全相同，仅标题不同）→ 确认后以 replace 语义写入全部目标。
  * 全不勾选确认即清除所选条目的全部标签；集合无实际变化时 store 层不写盘、不触发刷新。
+ *
+ * @param item - 触发菜单的树条目
+ * @param selectedItems - 多选时的 selection 数组
+ * @param buildTitle - 标题构造器：入参为待操作条目名（逗号连接），返回已翻译标题文案
  */
 async function pickAndSetTags(
   item: Entry | undefined,
@@ -194,7 +210,12 @@ async function pickAndSetTags(
   await folderStore.setItemTags(targets, result);
 }
 
-/** 添加标签：未加标签条目的右键菜单项（与「管理标签」共用同一多选 QuickPick，仅标题不同）。 */
+/**
+ * 添加标签：未加标签条目的右键菜单项（与「管理标签」共用同一多选 QuickPick，仅标题不同）。
+ *
+ * @param item - 触发菜单的树条目
+ * @param selectedItems - 多选时的 selection 数组
+ */
 export const ADD_TAG_COMMAND = defineCommand(
   'folderShelf.addTag',
   async (item?: Entry, selectedItems?: readonly Entry[]): Promise<void> => {
@@ -202,7 +223,12 @@ export const ADD_TAG_COMMAND = defineCommand(
   }
 );
 
-/** 管理标签：已加标签条目的右键菜单项（与「添加标签」共用同一多选 QuickPick，仅标题不同）。 */
+/**
+ * 管理标签：已加标签条目的右键菜单项（与「添加标签」共用同一多选 QuickPick，仅标题不同）。
+ *
+ * @param item - 触发菜单的树条目
+ * @param selectedItems - 多选时的 selection 数组
+ */
 export const MANAGE_TAGS_COMMAND = defineCommand(
   'folderShelf.manageTags',
   async (item?: Entry, selectedItems?: readonly Entry[]): Promise<void> => {
@@ -210,7 +236,11 @@ export const MANAGE_TAGS_COMMAND = defineCommand(
   }
 );
 
-/** 重命名标签：批量改写所有持有该标签条目的 tags 字段。目标取右键回传的标签节点。 */
+/**
+ * 重命名标签：批量改写所有持有该标签条目的 tags 字段。目标取右键回传的标签节点。
+ *
+ * @param item - 触发菜单的树条目（须为标签节点，否则忽略）
+ */
 export const RENAME_TAG_COMMAND = defineCommand(
   'folderShelf.renameTag',
   async (item?: Entry): Promise<void> => {
@@ -228,7 +258,11 @@ export const RENAME_TAG_COMMAND = defineCommand(
   }
 );
 
-/** 删除标签：确认后从所有持有该标签的条目中移除（条目本身保留）。目标取右键回传的标签节点。 */
+/**
+ * 删除标签：确认后从所有持有该标签的条目中移除（条目本身保留）。目标取右键回传的标签节点。
+ *
+ * @param item - 触发菜单的树条目（须为标签节点，否则忽略）
+ */
 export const DELETE_TAG_COMMAND = defineCommand(
   'folderShelf.deleteTag',
   async (item?: Entry): Promise<void> => {

@@ -7,16 +7,25 @@ import { inject } from '../services/container';
 import { FolderStore } from '../services/folderStore';
 import { ViewModeStore } from '../services/viewModeStore';
 
-/** 自定义 context key：selection 是否同时含已分组与未分组条目（供菜单 when 感知 selection 组成成分） */
+/** 自定义 context key：selection 是否同时含已分组与未分组条目（供菜单 when 感知 selection 组成成分），值恒为 boolean */
 const SELECTION_MIXED_KEY = 'folderShelf.selectionMixed';
 
+/** registerTreeViews 的返回值：视图相关的可释放对象与对外引用 */
 export interface RegisteredViews {
+  /** 全部需挂到 context.subscriptions 的可释放对象（视图、Provider、事件订阅、装饰器） */
   readonly disposables: vscode.Disposable[];
+  /** 树数据 Provider 实例（供组合根或后续扩展引用） */
   readonly foldersProvider: FoldersProvider;
-  /** 供组合根传给需要读取 selection 的命令（defineWiredCommand wire 注入） */
+  /** 创建后的树视图句柄，供调用方读取选择状态或注册后续交互 */
   readonly foldersView: vscode.TreeView<Entry>;
 }
 
+/**
+ * 树视图组合根：创建收藏树 Provider、TreeView 与拖拽控制器，
+ * 并订阅数据变更、展示模式切换、selection 变更三类事件维护视图状态。
+ *
+ * @returns 视图句柄集合（含需统一释放的 disposables）
+ */
 export function registerTreeViews(): RegisteredViews {
   const folderStore = inject(FolderStore);
   const viewModeStore = inject(ViewModeStore);
@@ -39,9 +48,13 @@ export function registerTreeViews(): RegisteredViews {
     foldersProvider.refresh();
   });
 
-  // 混选状态写入自定义 context key：viewItem 只反映单条目视角，静态内置键（如 listMultiSelection）
-  // 无法区分「多选全已分组」与「混选」，唯有携带 selection 组成成分的自定义键能让 when 子句二者兼顾。
-  // 右键前必先改选（onDidChangeSelection 先于菜单求值触发），键值天然就绪
+  /**
+   * 将当前选择是否混合包含已分组和未分组条目写入自定义上下文键。
+   * viewItem 只反映单条目，内置键无法区分「多选全已分组」与「混选」；右键前的选择事件
+   * 先于菜单条件求值，因此在此同步后，菜单的 when 子句始终能读取到最新组成状态。
+   *
+   * @param selection - 当前树选择；非登记节点会被忽略
+   */
   const updateSelectionMixed = (selection: readonly Entry[]): void => {
     const managed = selection.filter(isManagedEntry);
     const mixed =

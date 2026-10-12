@@ -1,33 +1,52 @@
 import * as vscode from 'vscode';
 import { FolderStore } from '../../services/folderStore';
+import type { ItemTagUpdate } from '../../services/folderStore';
 import { isManagedEntry } from './entries';
 import type { Entry, NodeEntry, TagEntry } from './entries';
 
-/** 树内拖拽使用的 MIME 类型（约定为树 id 的小写形式） */
+/** 树内拖拽使用的 MIME 类型（约定为树 id 的小写形式），value 为登记条目数组 */
 const TREE_MIME_TYPE = 'application/vnd.code.tree.foldershelf.views.folders';
 
-/** 设置段与设置键：拖到标签节点时对已加标签条目的处理方式 */
+/** 设置段前缀 */
 const SETTING_SECTION = 'folderShelf';
+/** 设置键：拖到标签节点时对已加标签条目的处理方式 */
 const SETTING_DRAG_TO_TAG = 'dragToTagAction';
 
 /** 拖到标签节点时的处理方式：始终询问 / 从当前标签移出 / 保留现有标签 */
 type DragToTagAction = 'alwaysAsk' | 'removeCurrent' | 'keepCurrent';
 
+/** 已至少包含一个标签的登记节点。 */
+type TaggedNodeEntry = NodeEntry & {
+  /** 非空标签数组；类型守卫会在拖放处理前验证其长度 */
+  readonly tags: string[];
+};
+
 /**
  * 收藏树的拖拽控制器：
  * - 拖拽登记条目（文件夹/文件）到分组节点 → 归入该分组
  * - 拖到视图空白区（target 为 undefined）→ 移出分组
- * - 拖到「未分组」节点 → 移出分组；拖到「未加标签」节点 → 清除全部标签（处理逻辑同「未分组」一致）
+ * - 拖到「未分组」节点 → 移出分组；拖到「未加标签」节点 → 清除全部标签
  * - 拖到标签节点 → 无标签条目直接新增该标签；已加标签条目按设置处理（默认弹窗询问）：
  *   「当前标签」指条目被拖出所在的标签组（由渲染时挂在 NodeEntry 上的 underTag 随拖拽传出）
  * - 拖到具体条目上不处理（不做磁盘移动/排序）
  */
 export class FoldersDragAndDropController implements vscode.TreeDragAndDropController<Entry> {
+  /** 接受的拖入 MIME（仅本树内部拖拽） */
   readonly dropMimeTypes = [TREE_MIME_TYPE];
+  /** 拖出时携带的 MIME（value 为 managed 的 NodeEntry 数组） */
   readonly dragMimeTypes = [TREE_MIME_TYPE];
 
+  /**
+   * @param folderStore - 处理拖放结果的收藏列表存储服务
+   */
   constructor(private readonly folderStore: FolderStore) { }
 
+  /**
+   * 拖拽开始：把登记条目（含标签模式下的 underTag 上下文）写入 DataTransfer。
+   *
+   * @param source - 被拖拽的条目数组（可能含非 managed 条目，会被过滤）
+   * @param dataTransfer - 拖拽数据载体（写入本树 MIME，value 为 NodeEntry 数组）
+   */
   handleDrag(source: readonly Entry[], dataTransfer: vscode.DataTransfer): void {
     // 仅登记的根层级条目（managed）可拖拽分组；标签模式下子层级渲染的 NodeEntry 带 underTag 一并传出
     const entries = source.filter(isManagedEntry);
@@ -37,6 +56,13 @@ export class FoldersDragAndDropController implements vscode.TreeDragAndDropContr
     }
   }
 
+  /**
+   * 拖放落点分派：分组 → 归组；标签 → dropOnTag；「未加标签」→ 清除标签；
+   * 空白区/「未分组」→ 移出分组；拖到具体条目上不处理。
+   *
+   * @param target - 拖放落点条目；undefined 表示视图空白区
+   * @param dataTransfer - 拖拽数据载体（读取本树 MIME 还原拖拽条目）
+   */
   async handleDrop(
     target: Entry | undefined,
     dataTransfer: vscode.DataTransfer
@@ -67,12 +93,15 @@ export class FoldersDragAndDropController implements vscode.TreeDragAndDropContr
    * dragToTagAction 决定动作——「从当前标签移出」保留其余标签、移出被拖出的标签组；
    * 「保留现有标签」原样追加；「始终询问」弹模态确认，取消则仅放弃已加标签条目的处理。
    * 混合拖拽一次询问，动作按各自 underTag 独立执行；整批经 applyItemTags 单次写盘。
+   *
+   * @param target - 拖放落点的标签节点
+   * @param entries - 被拖拽的登记条目（可含无标签与已加标签混合）
    */
   private async dropOnTag(target: TagEntry, entries: readonly NodeEntry[]): Promise<void> {
     const tagged = entries.filter(
-      (entry): entry is NodeEntry & { tags: string[] } => (entry.tags?.length ?? 0) > 0
+      (entry): entry is TaggedNodeEntry => (entry.tags?.length ?? 0) > 0
     );
-    const updates: Array<{ uri: vscode.Uri; tags: string[] }> = [];
+    const updates: ItemTagUpdate[] = [];
 
     // 规则1：无标签条目直接新增（无需确认）
     for (const entry of entries) {

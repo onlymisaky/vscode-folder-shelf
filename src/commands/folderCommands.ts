@@ -6,7 +6,20 @@ import { inject } from '../services/container';
 import { isManagedEntry } from '../treeViews/foldersProvider/entries';
 import type { Entry } from '../treeViews/foldersProvider/entries';
 
-/** 加入列表并提示被跳过的重复项（addItem 与「添加当前项目」共用）。 */
+/** 当前平台文件管理器相关操作的本地化标签。 */
+interface FileManagerLabels {
+  /** 在父目录中定位并选中目标资源的操作标签 */
+  readonly reveal: string;
+  /** 直接在系统文件管理器中打开目标目录的操作标签 */
+  readonly open: string;
+}
+
+/**
+ * 加入列表并提示被跳过的重复项（addItem 与「添加当前项目」共用）。
+ *
+ * @param folderStore - 收藏列表存储服务（经容器注入）
+ * @param uris - 待添加的资源 Uri 列表
+ */
 async function addAndReportSkipped(
   folderStore: FolderStore,
   uris: readonly vscode.Uri[]
@@ -19,6 +32,10 @@ async function addAndReportSkipped(
   }
 }
 
+/**
+ * 打开文件选择对话框添加文件夹/文件（视图标题栏「添加」按钮触发）。
+ * 支持文件与文件夹混合多选；重复项自动跳过并提示数量。
+ */
 export const ADD_ITEM_COMMAND = defineCommand('folderShelf.addItem', async () => {
   const folderStore = inject(FolderStore);
 
@@ -80,9 +97,12 @@ export const COLLAPSE_ALL_COMMAND = defineCommand('folderShelf.collapseAll', asy
 });
 
 /**
- * 从菜单/inline 图标回传的参数解析目标（登记的根文件夹），按 fsPath 去重。
- * 实测：回传的是 getChildren 返回的元素本身（Entry），而非 TreeItem；
- * 多选时第二参数为 selection 数组。两个命令均仅从菜单触发，参数恒有值。
+ * 从菜单或 inline 图标回传的参数中提取登记条目，并按 fsPath 去重。
+ * VSCode 回传 getChildren 产生的 Entry；多选时第二个参数为当前 selection。
+ *
+ * @param item - 触发菜单的树条目（单选时的目标）
+ * @param selectedItems - 多选时 VSCode 额外回传的当前 selection 数组
+ * @returns 目标条目的 Uri 列表（按 fsPath 去重、保持出现顺序）；无有效目标时为空数组
  */
 export function collectManagedUris(item?: Entry, selectedItems?: readonly Entry[]): vscode.Uri[] {
   const uris = new Map<string, vscode.Uri>();
@@ -96,7 +116,10 @@ export function collectManagedUris(item?: Entry, selectedItems?: readonly Entry[
 
 /**
  * 移除登记的文件夹/文件：从树条目右键菜单触发，仅从列表移除（不影响磁盘文件）。
- * 目标从菜单回传参数解析（多选时 VSCode 回传 (item, selectedItems)）。
+ * 目标从菜单回传参数解析（多选时 VSCode 回传 (item, selectedItems)），确认后批量移除。
+ *
+ * @param item - 触发菜单的树条目
+ * @param selectedItems - 多选时的 selection 数组
  */
 export const REMOVE_ITEM_COMMAND = defineCommand(
   'folderShelf.removeItem',
@@ -130,12 +153,20 @@ export const REMOVE_ITEM_COMMAND = defineCommand(
   }
 );
 
+/**
+ * 检查文件夹在磁盘上是否存在；不存在时弹窗引导用户从列表移除（其他错误原样抛出）。
+ *
+ * @param uri - 待检查的资源 Uri
+ * @param folderStore - 收藏列表存储服务（用户确认移除时调用）
+ * @returns 资源存在，或用户确认移除了失效条目时为 true；资源失效且用户取消移除时为 false
+ */
 async function checkFolderExistAndRemoveNotFound(uri: vscode.Uri, folderStore: FolderStore): Promise<boolean> {
   const pathName = path.basename(uri.fsPath);
   try {
     await vscode.workspace.fs.stat(uri);
     return true;
   } catch (error) {
+    // 仅文件不存在才引导移除，其余错误（权限等）原样抛出
     if (!(error instanceof vscode.FileSystemError && error.code === 'FileNotFound')) {
       throw error;
     }
@@ -158,8 +189,10 @@ async function checkFolderExistAndRemoveNotFound(uri: vscode.Uri, folderStore: F
  * 系统文件管理器「定位 / 打开」两项标签，按平台区分命名：
  * macOS 为 Finder，Windows 为文件资源管理器，Linux 无统一名称泛称文件管理器。
  * 各分支均为静态字面量，保证 l10n 提取完整。
+ *
+ * @returns reveal 为「定位到该文件夹」标签，open 为「直接打开该文件夹」标签（均已经 l10n 翻译）
  */
-function fileManagerLabels(): { reveal: string; open: string } {
+function fileManagerLabels(): FileManagerLabels {
   if (process.platform === 'darwin') {
     return { reveal: vscode.l10n.t('Reveal in Finder'), open: vscode.l10n.t('Open in Finder') };
   }
@@ -175,7 +208,13 @@ function fileManagerLabels(): { reveal: string; open: string } {
   };
 }
 
-/** 打开前检查磁盘状态（失效时引导移除），随后 QuickPick 选择打开方式（当前窗口 / 新窗口 / 终端 / 调试终端 / 文件管理器 / 工作区）。 */
+/**
+ * 打开前检查磁盘状态（失效时引导移除），随后 QuickPick 选择打开方式
+ * （当前窗口 / 新窗口 / 终端 / 调试终端 / 文件管理器）。
+ *
+ * @param uri - 待打开的文件夹 Uri
+ * @param folderStore - 收藏列表存储服务（失效条目移除时使用）
+ */
 async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): Promise<void> {
   if (!await checkFolderExistAndRemoveNotFound(uri, folderStore)) {
     return;
@@ -228,8 +267,7 @@ async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): P
     OPEN_IN_FILE_MANAGER,
   ];
 
-  // 添加到当前工作区
-  // 暂不开放该功能
+  // 预留功能：将目录添加到当前多根工作区。当前不向用户展示，保留实现供后续开放
   if (vscode.workspace.workspaceFolders?.length && false) {
     items.push({
       label: vscode.l10n.t('Add to Workspace'),
@@ -283,7 +321,7 @@ async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): P
     return;
   }
 
-  // 追加为当前工作区的工作区文件夹（多根工作区）
+  // 仅对应上方当前禁用的「添加到工作区」选项
   const start = vscode.workspace.workspaceFolders?.length ?? 0;
   const updated = vscode.workspace.updateWorkspaceFolders(start, 0, { uri });
   if (!updated) {
@@ -296,6 +334,8 @@ async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): P
 /**
  * 打开登记的根文件夹：由条目右侧的 inline 图标触发（view/item/context 的 inline group）。
  * 目标取 inline 回传的元素。
+ *
+ * @param item - inline 按钮所在行的树条目
  */
 export const OPEN_FOLDER_COMMAND = defineCommand(
   'folderShelf.openFolder',

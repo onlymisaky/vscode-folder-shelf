@@ -4,6 +4,12 @@ import { ADD_CURRENT_PROJECT_COMMAND, ADD_ITEM_COMMAND, COLLAPSE_ALL_COMMAND, OP
 import { DISSOLVE_GROUP_COMMAND, MOVE_OUT_OF_GROUP_COMMAND, MOVE_TO_GROUP_COMMAND, RENAME_GROUP_COMMAND, SHOW_FLAT_COMMAND, SHOW_GROUPED_COMMAND, SHOW_TAGGED_COMMAND } from './groupCommands';
 import { ADD_TAG_COMMAND, DELETE_TAG_COMMAND, MANAGE_TAGS_COMMAND, RENAME_TAG_COMMAND } from './tagCommands';
 
+/**
+ * 命令注册入口：集中列出全部命令定义并逐一注册到 VSCode。
+ *
+ * @param _deps - 预留给 wire 版命令的组合根依赖（当前命令全部经 service 容器注入，未使用）
+ * @returns 全部命令的 Disposable（须挂到 context.subscriptions，随扩展停用注销）
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function registerCommands(_deps: unknown): vscode.Disposable[] {
   const commands = [
@@ -34,6 +40,7 @@ export function registerCommands(_deps: unknown): vscode.Disposable[] {
   });
 }
 
+/** 全部命令定义的再导出（供 treeViews 等模块引用命令常量） */
 export {
   OPEN_FILE_COMMAND,
   OPEN_CONFIG_FILE_COMMAND,
