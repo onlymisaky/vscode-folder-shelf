@@ -7,14 +7,7 @@ import { inject } from '../services/container';
 import { collectManagedUris } from './folderCommands';
 import { GROUP_ICON, isGroupEntry } from '../treeViews/foldersProvider/entries';
 import type { Entry } from '../treeViews/foldersProvider/entries';
-
-/** 输入框校验：分组名不能为空白。不保留任何名称——「未分组」虚拟节点由 Entry kind 标识，真实分组允许同名（树上以 tooltip 区分）。 */
-function validateGroupName(value: string): string | undefined {
-  if (value.trim() === '') {
-    return vscode.l10n.t('Group name cannot be empty.');
-  }
-  return undefined;
-}
+import { confirmDanger, createNameValidator, renameViaInputBox } from '../utils';
 
 /** pickGroup 的结果：选中某个选项 / 输入了不存在的分组名直接创建 / 取消 */
 type GroupPickResult =
@@ -26,7 +19,7 @@ type GroupPickResult =
  * 分组选择 QuickPick：输入不存在的分组名时在最上方动态提供「创建分组 "{0}"」项，回车直接创建并归组，
  * 无需再走「新建分组…」的二次输入框。
  */
-async function pickGroup(
+function pickGroup(
   items: readonly vscode.QuickPickItem[],
   existingGroups: readonly string[],
   title: string
@@ -34,18 +27,22 @@ async function pickGroup(
   const quickPick = vscode.window.createQuickPick();
   quickPick.title = title;
   quickPick.placeholder = vscode.l10n.t('Enter group name');
-  quickPick.items = [...items];
 
   // 输入值 trim 后非空且不是现有分组名 → 动态插入创建项（label 含输入值才能在内置过滤中存活）
   let pendingCreate: { name: string; item: vscode.QuickPickItem } | undefined;
+  // 重挂 items：创建项（若有）→ 静态选项；首挂走同一路径，show 前必须先挂 items
+  const remount = (): void => {
+    quickPick.items = pendingCreate ? [pendingCreate.item, ...items] : [...items];
+  };
   quickPick.onDidChangeValue((value) => {
     const trimmed = value.trim();
     pendingCreate =
       trimmed === '' || existingGroups.includes(trimmed)
         ? undefined
         : { name: trimmed, item: { label: `$(plus) ${vscode.l10n.t('Create group "{0}"', trimmed)}` } };
-    quickPick.items = pendingCreate ? [pendingCreate.item, ...items] : [...items];
+    remount();
   });
+  remount();
 
   return new Promise<GroupPickResult>((resolve) => {
     quickPick.onDidAccept(() => {
@@ -65,12 +62,17 @@ async function pickGroup(
   });
 }
 
-/** 以分组形式展示（视图标题栏按钮，与 showFlat 随上下文键互斥显示） */
+/** 以标签形式展示（视图标题栏按钮，三态循环切换中的一环：平铺 → 标签 → 分组） */
+export const SHOW_TAGGED_COMMAND = defineCommand('folderShelf.showTagged', () => {
+  inject(ViewModeStore).set('tagged');
+});
+
+/** 以分组形式展示（视图标题栏按钮，与 showFlat/showTagged 随上下文键互斥显示） */
 export const SHOW_GROUPED_COMMAND = defineCommand('folderShelf.showGrouped', () => {
   inject(ViewModeStore).set('grouped');
 });
 
-/** 平铺展示（视图标题栏按钮，与 showGrouped 随上下文键互斥显示） */
+/** 平铺展示（视图标题栏按钮，与 showGrouped/showTagged 随上下文键互斥显示） */
 export const SHOW_FLAT_COMMAND = defineCommand('folderShelf.showFlat', () => {
   inject(ViewModeStore).set('flat');
 });
@@ -82,17 +84,14 @@ export const RENAME_GROUP_COMMAND = defineCommand(
     if (!isGroupEntry(item)) {
       return;
     }
-    const name = await vscode.window.showInputBox({
-      title: vscode.l10n.t('Rename Group'),
-      value: item.name,
-      validateInput: validateGroupName,
-    });
-    // 输入统一首尾去空后再比较与保存
-    const trimmed = name?.trim() ?? '';
-    if (trimmed === '' || trimmed === item.name) {
-      return;
-    }
-    await inject(FolderStore).renameGroup(item.name, trimmed);
+    await renameViaInputBox(
+      item.name,
+      {
+        title: vscode.l10n.t('Rename Group'),
+        emptyMessage: vscode.l10n.t('Group name cannot be empty.'),
+      },
+      (newName) => inject(FolderStore).renameGroup(item.name, newName)
+    );
   }
 );
 
@@ -103,13 +102,11 @@ export const DISSOLVE_GROUP_COMMAND = defineCommand(
     if (!isGroupEntry(item)) {
       return;
     }
-    const DISSOLVE: vscode.MessageItem = { title: vscode.l10n.t('Dissolve') };
-    const confirmed = await vscode.window.showWarningMessage(
+    const confirmed = await confirmDanger(
       vscode.l10n.t('Dissolve group "{0}"? Items inside will become ungrouped.', item.name),
-      { modal: true },
-      DISSOLVE
+      vscode.l10n.t('Dissolve')
     );
-    if (confirmed !== DISSOLVE) {
+    if (!confirmed) {
       return;
     }
     await inject(FolderStore).dissolveGroup(item.name);
@@ -158,7 +155,7 @@ export const MOVE_TO_GROUP_COMMAND = defineCommand(
     items.push(NEW_GROUP_ITEM);
 
     // 仅当选中项中存在已分组条目时才提供「移出分组」
-    const withGroups = await folderStore.getAllWithGroups();
+    const withGroups = await folderStore.getAllWithMeta();
     const groupByPath = new Map(withGroups.map((entry) => [entry.uri.fsPath, entry.group]));
     const hasGrouped = targets.some((uri) => groupByPath.get(uri.fsPath) !== undefined);
     const MOVE_OUT_OF_GROUP_ITEM: vscode.QuickPickItem = {
@@ -192,7 +189,7 @@ export const MOVE_TO_GROUP_COMMAND = defineCommand(
       const name = await vscode.window.showInputBox({
         title: vscode.l10n.t('New Group'),
         prompt: vscode.l10n.t('Enter group name'),
-        validateInput: validateGroupName,
+        validateInput: createNameValidator('Group name cannot be empty.'),
       });
       if (name === undefined || name.trim() === '') {
         return;

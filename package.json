@@ -68,6 +68,11 @@
         "icon": "$(list-tree)"
       },
       {
+        "command": "folderShelf.showTagged",
+        "title": "%folderShelf.showTagged.title%",
+        "icon": "$(tag)"
+      },
+      {
         "command": "folderShelf.showFlat",
         "title": "%folderShelf.showFlat.title%",
         "icon": "$(list-unordered)"
@@ -87,6 +92,22 @@
       {
         "command": "folderShelf.dissolveGroup",
         "title": "%folderShelf.dissolveGroup.title%"
+      },
+      {
+        "command": "folderShelf.addTag",
+        "title": "%folderShelf.addTag.title%"
+      },
+      {
+        "command": "folderShelf.manageTags",
+        "title": "%folderShelf.manageTags.title%"
+      },
+      {
+        "command": "folderShelf.renameTag",
+        "title": "%folderShelf.renameTag.title%"
+      },
+      {
+        "command": "folderShelf.deleteTag",
+        "title": "%folderShelf.deleteTag.title%"
       }
     ],
     "submenus": [
@@ -111,7 +132,11 @@
         },
         {
           "command": "folderShelf.showGrouped",
-          "when": "!folderShelf.groupedView"
+          "when": "folderShelf.taggedView"
+        },
+        {
+          "command": "folderShelf.showTagged",
+          "when": "folderShelf.flatView"
         },
         {
           "command": "folderShelf.showFlat",
@@ -131,6 +156,22 @@
         },
         {
           "command": "folderShelf.dissolveGroup",
+          "when": "false"
+        },
+        {
+          "command": "folderShelf.addTag",
+          "when": "false"
+        },
+        {
+          "command": "folderShelf.manageTags",
+          "when": "false"
+        },
+        {
+          "command": "folderShelf.renameTag",
+          "when": "false"
+        },
+        {
+          "command": "folderShelf.deleteTag",
           "when": "false"
         }
       ],
@@ -152,7 +193,12 @@
         },
         {
           "command": "folderShelf.showGrouped",
-          "when": "view == folderShelf.views.folders && !folderShelf.groupedView",
+          "when": "view == folderShelf.views.folders && folderShelf.taggedView",
+          "group": "navigation@4"
+        },
+        {
+          "command": "folderShelf.showTagged",
+          "when": "view == folderShelf.views.folders && folderShelf.flatView",
           "group": "navigation@4"
         },
         {
@@ -179,18 +225,28 @@
         },
         {
           "command": "folderShelf.moveToGroup",
-          "when": "view == folderShelf.views.folders && (viewItem =~ /^folders\\.(folder|file)$/ || (folderShelf.selectionMixed && viewItem =~ /^folders\\.(folder|file)(\\.grouped)?$/))",
+          "when": "view == folderShelf.views.folders && (viewItem =~ /^folders\\.(folder|file)(\\.tagged)?$/ || (folderShelf.selectionMixed && viewItem =~ /^folders\\.(folder|file)(\\.grouped)?(\\.tagged)?$/))",
           "group": "9_folderShelf@1"
         },
         {
           "submenu": "folderShelf.group",
-          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped$/ && !folderShelf.selectionMixed",
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped(\\.tagged)?$/ && !folderShelf.selectionMixed",
           "group": "9_folderShelf@1"
+        },
+        {
+          "command": "folderShelf.addTag",
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)(\\.grouped)?$/",
+          "group": "9_folderShelf@2"
+        },
+        {
+          "command": "folderShelf.manageTags",
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)(\\.grouped)?\\.tagged$/",
+          "group": "9_folderShelf@2"
         },
         {
           "command": "folderShelf.removeItem",
           "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)/",
-          "group": "9_folderShelf@2"
+          "group": "9_folderShelf@3"
         },
         {
           "command": "folderShelf.renameGroup",
@@ -201,17 +257,27 @@
           "command": "folderShelf.dissolveGroup",
           "when": "view == folderShelf.views.folders && viewItem == folders.group",
           "group": "9_folderShelf@2"
+        },
+        {
+          "command": "folderShelf.renameTag",
+          "when": "view == folderShelf.views.folders && viewItem == folders.tag",
+          "group": "9_folderShelf@1"
+        },
+        {
+          "command": "folderShelf.deleteTag",
+          "when": "view == folderShelf.views.folders && viewItem == folders.tag",
+          "group": "9_folderShelf@2"
         }
       ],
       "folderShelf.group": [
         {
           "command": "folderShelf.moveToGroup",
-          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped$/",
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped(\\.tagged)?$/",
           "group": "1_folderShelf@1"
         },
         {
           "command": "folderShelf.moveOutOfGroup",
-          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped$/",
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped(\\.tagged)?$/",
           "group": "1_folderShelf@2"
         }
       ]
@@ -225,6 +291,26 @@
             "default": "",
             "markdownDescription": "%folderShelf.configFile.description%",
             "scope": "application"
+          },
+          "folderShelf.dragToTagAction": {
+            "type": "string",
+            "enum": [
+              "alwaysAsk",
+              "removeCurrent",
+              "keepCurrent"
+            ],
+            "enumItemLabels": [
+              "%folderShelf.dragToTagAction.alwaysAsk.label%",
+              "%folderShelf.dragToTagAction.removeCurrent.label%",
+              "%folderShelf.dragToTagAction.keepCurrent.label%"
+            ],
+            "enumDescriptions": [
+              "%folderShelf.dragToTagAction.alwaysAsk.description%",
+              "%folderShelf.dragToTagAction.removeCurrent.description%",
+              "%folderShelf.dragToTagAction.keepCurrent.description%"
+            ],
+            "default": "alwaysAsk",
+            "markdownDescription": "%folderShelf.dragToTagAction.description%"
           }
         }
       }

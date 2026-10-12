@@ -2,21 +2,23 @@ import * as vscode from 'vscode';
 import { ADD_ITEM_COMMAND, OPEN_FILE_COMMAND } from '../../commands';
 import { FolderStore } from '../../services/folderStore';
 import { ViewMode, ViewModeStore } from '../../services/viewModeStore';
-import { GROUP_ICON, toNodeEntry } from './entries';
+import { GROUP_ICON, TAG_ICON, toNodeEntry } from './entries';
 import type { Entry, NodeEntry } from './entries';
-import { FlatRootBuilder, GroupedRootBuilder } from './rootBuilders';
+import { FlatRootBuilder, GroupedRootBuilder, TaggedRootBuilder } from './rootBuilders';
 import type { RootBuilder } from './rootBuilders';
 
 /**
- * 「未分组」虚拟节点专用 scheme：仅用于挂 FileDecorationProvider 实现整体弱化着色，不对应磁盘资源。
- * 不保留任何名称——真实分组允许与虚拟节点同名，靠颜色深浅区分。
+ * 「未分组」「未加标签」虚拟节点专用 scheme：仅用于挂 FileDecorationProvider 实现整体弱化着色，
+ * 不对应磁盘资源。不保留任何名称——真实分组/标签允许与虚拟节点同名，靠颜色深浅区分。
  */
 export const UNGROUPED_SCHEME = 'folderShelf-ungrouped';
+export const UNTAGGED_SCHEME = 'folderShelf-untagged';
 
 const UNGROUPED_RESOURCE = vscode.Uri.from({ scheme: UNGROUPED_SCHEME, path: '/ungrouped' });
+const UNTAGGED_RESOURCE = vscode.Uri.from({ scheme: UNTAGGED_SCHEME, path: '/untagged' });
 
-/** 「未分组」虚拟节点行尾 badge 字符：∅ 表达「不属于任何分组」，语言中立且比符号 - 更醒目 */
-const UNGROUPED_BADGE = '∅';
+/** 虚拟节点行尾 badge 字符：∅ 表达「不属于任何分组/标签」，语言中立且比符号 - 更醒目 */
+const VIRTUAL_BADGE = '∅';
 
 export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<Entry | undefined>();
@@ -31,6 +33,7 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
   ) {
     this.rootBuilders = {
       flat: new FlatRootBuilder(folderStore),
+      tagged: new TaggedRootBuilder(folderStore),
       grouped: new GroupedRootBuilder(folderStore),
     };
   }
@@ -77,7 +80,7 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
     }
 
     // 「未分组」虚拟分组：不设 contextValue（不提供重命名/解散等分组菜单）；
-    // 不保留任何名称，真实分组允许同名，靠更浅的禁用色 + badge「∅」（UngroupedDecorationProvider）+ tooltip 区分
+    // 不保留任何名称，真实分组允许同名，靠更浅的禁用色 + badge「∅」（VirtualGroupDecorationProvider）+ tooltip 区分
     if (element.kind === 'ungrouped') {
       const item = new vscode.TreeItem(
         vscode.l10n.t('Ungrouped'),
@@ -86,6 +89,27 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
       item.resourceUri = UNGROUPED_RESOURCE;
       item.iconPath = new vscode.ThemeIcon(GROUP_ICON);
       item.tooltip = vscode.l10n.t('Virtual group collecting items not assigned to any group.');
+      return item;
+    }
+
+    // 标签节点：虚拟条目，不设 resourceUri（非磁盘路径），用标签图标区别于真实文件夹
+    if (element.kind === 'tag') {
+      const item = new vscode.TreeItem(element.name, vscode.TreeItemCollapsibleState.Collapsed);
+      item.iconPath = new vscode.ThemeIcon(TAG_ICON);
+      item.contextValue = 'folders.tag';
+      return item;
+    }
+
+    // 「未加标签」虚拟分组：展示与处理逻辑同「未分组」一致（弱化着色 + badge「∅」+ tooltip），
+    // 图标用标签样式；不设 contextValue（不提供标签管理菜单）
+    if (element.kind === 'untagged') {
+      const item = new vscode.TreeItem(
+        vscode.l10n.t('Untagged'),
+        vscode.TreeItemCollapsibleState.Collapsed
+      );
+      item.resourceUri = UNTAGGED_RESOURCE;
+      item.iconPath = new vscode.ThemeIcon(TAG_ICON);
+      item.tooltip = vscode.l10n.t('Virtual group collecting items without any tag.');
       return item;
     }
 
@@ -108,8 +132,10 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
     // 打开文件夹操作由条目右侧的 inline 图标触发（view/item/context inline group），不绑定行单击命令
     if (element.managed) {
       const base = isDirectory ? 'folders.folder' : 'folders.file';
-      // 已分组条目追加 .grouped 后缀，供「移出分组」等菜单做 when 过滤
-      item.contextValue = element.group ? `${base}.grouped` : base;
+      // 已分组/已加标签条目依次追加 .grouped/.tagged 后缀，供「移出分组」「管理标签」等菜单做 when 过滤
+      item.contextValue = element.group
+        ? `${base}.grouped${element.tags?.length ? '.tagged' : ''}`
+        : `${base}${element.tags?.length ? '.tagged' : ''}`;
     }
 
     return item;
@@ -129,25 +155,46 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
 
     // 分组子层级：该组名下的登记条目（组由条目派生，必有成员）
     if (element.kind === 'group') {
-      const items = await this.folderStore.getAllWithGroups();
+      const items = await this.folderStore.getAllWithMeta();
       return Promise.all(
         items
           .filter((item) => item.group === element.name)
-          .map((item) => toNodeEntry(item.uri, item.group))
+          .map((item) => toNodeEntry(item.uri, item.group, item.tags))
       );
     }
 
     // 「未分组」子层级：所有未分组（含悬空 group）条目
     if (element.kind === 'ungrouped') {
       const [items, groups] = await Promise.all([
-        this.folderStore.getAllWithGroups(),
+        this.folderStore.getAllWithMeta(),
         this.folderStore.getGroups(),
       ]);
       const known = new Set(groups);
       return Promise.all(
         items
           .filter((item) => !item.group || !known.has(item.group))
-          .map((item) => toNodeEntry(item.uri))
+          .map((item) => toNodeEntry(item.uri, undefined, item.tags))
+      );
+    }
+
+    // 标签子层级：挂有该标签的条目（同一条目可出现在多个标签节点下）。
+    // underTag 记录渲染所在的标签组，随拖拽传出供 handleDrop 判定「从哪个标签组拖出」
+    if (element.kind === 'tag') {
+      const items = await this.folderStore.getAllWithMeta();
+      return Promise.all(
+        items
+          .filter((item) => item.tags?.includes(element.name))
+          .map((item) => toNodeEntry(item.uri, item.group, item.tags, element.name))
+      );
+    }
+
+    // 「未加标签」子层级：所有无标签条目
+    if (element.kind === 'untagged') {
+      const items = await this.folderStore.getAllWithMeta();
+      return Promise.all(
+        items
+          .filter((item) => !item.tags?.length)
+          .map((item) => toNodeEntry(item.uri, item.group, item.tags))
       );
     }
 
@@ -182,12 +229,12 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
   }
 }
 
-/** 「未分组」虚拟节点装饰：整行（label+图标）使用禁用前景色（比 deemphasized 更浅）+ 行尾 badge「∅」，与同名真实分组区分 */
-export class UngroupedDecorationProvider implements vscode.FileDecorationProvider {
+/** 虚拟节点（「未分组」「未加标签」）装饰：整行（label+图标）使用禁用前景色（比 deemphasized 更浅）+ 行尾 badge「∅」，与同名真实分组/标签区分 */
+export class VirtualGroupDecorationProvider implements vscode.FileDecorationProvider {
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
-    if (uri.scheme === UNGROUPED_SCHEME) {
+    if (uri.scheme === UNGROUPED_SCHEME || uri.scheme === UNTAGGED_SCHEME) {
       return new vscode.FileDecoration(
-        UNGROUPED_BADGE,
+        VIRTUAL_BADGE,
         undefined,
         new vscode.ThemeColor('disabledForeground')
       );

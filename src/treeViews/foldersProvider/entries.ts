@@ -13,6 +13,11 @@ export interface NodeEntry {
   readonly managed?: true;
   /** 所属分组名（未分组为 undefined）；已分组条目的 contextValue 追加 .grouped 后缀供菜单过滤 */
   readonly group?: string;
+  /** 标签列表（无标签为 undefined）；已加标签条目的 contextValue 追加 .tagged 后缀供菜单过滤 */
+  readonly tags?: string[];
+  /** 该渲染节点所在的标签组：仅标签模式下从标签节点子层级渲染时填充。纯拖拽上下文（不参与 TreeItem 渲染），
+   *  随 DataTransfer 传到 handleDrop，实现「从哪个标签组拖出，就从哪个标签组移出」语义。 */
+  readonly underTag?: string;
 }
 
 export interface PlaceholderEntry {
@@ -35,10 +40,31 @@ export interface UngroupedEntry {
   readonly kind: 'ungrouped';
 }
 
-export type Entry = NodeEntry | PlaceholderEntry | MissingEntry | GroupEntry | UngroupedEntry;
+/** 标签节点：虚拟条目，名字即标签名（标签由条目 tags 字段派生）；同一条目可挂多个标签、出现在多个标签节点下 */
+export interface TagEntry {
+  readonly kind: 'tag';
+  readonly name: string;
+}
+
+/** 「未加标签」虚拟分组：标签展示模式下收纳所有无标签条目（仅在存在无标签条目时显示） */
+export interface UntaggedEntry {
+  readonly kind: 'untagged';
+}
+
+export type Entry =
+  | NodeEntry
+  | PlaceholderEntry
+  | MissingEntry
+  | GroupEntry
+  | UngroupedEntry
+  | TagEntry
+  | UntaggedEntry;
 
 /** 分组节点图标（已验证本机 codicon.ttf 含该字形） */
 export const GROUP_ICON = 'library';
+
+/** 标签图标：标签选择器中标签项的图标（tag 为标准 codicon） */
+export const TAG_ICON = 'tag';
 
 /**
  * 判断菜单/inline 回传参数是否为登记的根文件夹元素。
@@ -59,8 +85,13 @@ export function isGroupEntry(value: unknown): value is GroupEntry {
   return typeof value === 'object' && value !== null && (value as GroupEntry).kind === 'group';
 }
 
-/** 登记条目 → 树节点：stat 判定文件/目录类型；失效条目按目录兜底，展开时由 readDirectory 的失效处理展示占位项 */
-export async function toNodeEntry(uri: vscode.Uri, group?: string): Promise<NodeEntry> {
+/** 判断菜单回传参数是否为标签节点（getChildren 返回的 TagEntry，非 TreeItem） */
+export function isTagEntry(value: unknown): value is TagEntry {
+  return typeof value === 'object' && value !== null && (value as TagEntry).kind === 'tag';
+}
+
+/** 登记条目 → 树节点：stat 判定文件/目录类型；失效条目按目录兜底，展开时由 readDirectory 的失效处理展示占位项。underTag 仅标签模式子层级填充（拖拽上下文） */
+export async function toNodeEntry(uri: vscode.Uri, group?: string, tags?: string[], underTag?: string): Promise<NodeEntry> {
   let type = vscode.FileType.Directory;
   try {
     const stat = await vscode.workspace.fs.stat(uri);
@@ -70,5 +101,5 @@ export async function toNodeEntry(uri: vscode.Uri, group?: string): Promise<Node
   } catch {
     // stat 失败（已删除/移动）时按目录兜底，保持与既有失效文件夹一致的展示
   }
-  return { kind: 'node', uri, type, managed: true, group };
+  return { kind: 'node', uri, type, managed: true, group, tags, ...(underTag ? { underTag } : {}) };
 }

@@ -11,12 +11,36 @@ interface StoredItem {
   path: string;
   /** 所属分组名；缺省为未分组。分组集合由全部条目的该字段派生（不单独存储 groups） */
   group?: string;
+  /** 标签列表（一个条目可属多个标签）；缺省为无标签。标签集合由全部条目的该字段派生（不单独存储） */
+  tags?: string[];
 }
 
-/** 携带分组信息的条目视图（getAllWithGroups 返回） */
-export interface GroupedEntry {
+/** 携带分组与标签信息的条目视图（getAllWithMeta 返回） */
+export interface ItemMeta {
   readonly uri: vscode.Uri;
   readonly group?: string;
+  readonly tags?: string[];
+}
+
+/** 标签集合 normalize：逐个 trim、去空、去重；结果为空视为无标签（undefined）。兼容手改 JSON 的脏元素（非字符串直接丢弃）。 */
+function normalizeTags(tags: readonly unknown[] | undefined): string[] | undefined {
+  const cleaned = [
+    ...new Set(
+      (tags ?? [])
+        .filter((tag): tag is string => typeof tag === 'string')
+        .map((tag) => tag.trim())
+        .filter((tag) => tag !== '')
+    ),
+  ];
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+/** 标签集合逐项比较（顺序敏感，保持用户勾选顺序）；undefined 视为无标签。 */
+function sameTags(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
+  if (a === undefined || b === undefined) {
+    return a === b;
+  }
+  return a.length === b.length && a.every((tag, index) => tag === b[index]);
 }
 
 /** 以独立的 JSON 文件持久化用户添加的文件夹/文件列表。 */
@@ -74,10 +98,14 @@ export class FolderStore implements vscode.Disposable {
     return items.map((item) => vscode.Uri.file(item.path));
   }
 
-  /** 获取全部条目及其分组名（分组模式渲染用）。 */
-  async getAllWithGroups(): Promise<GroupedEntry[]> {
+  /** 获取全部条目及其分组名、标签列表（树渲染用）。 */
+  async getAllWithMeta(): Promise<ItemMeta[]> {
     const items = await this.getItems();
-    return items.map((item) => ({ uri: vscode.Uri.file(item.path), group: item.group }));
+    return items.map((item) => ({
+      uri: vscode.Uri.file(item.path),
+      group: item.group,
+      tags: item.tags,
+    }));
   }
 
   /** 派生的分组名列表：按条目在列表中首次出现的顺序去重。分组仅在仍有成员时存在；不保留任何名称，「未分组」虚拟节点由 Entry kind 标识。 */
@@ -89,6 +117,19 @@ export class FolderStore implements vscode.Disposable {
       }
     }
     return groups;
+  }
+
+  /** 派生的标签列表：按条目在列表中首次出现的顺序去重。标签仅在仍被引用时存在；不保留任何名称。 */
+  async getTags(): Promise<string[]> {
+    const tags: string[] = [];
+    for (const item of await this.getItems()) {
+      for (const tag of item.tags ?? []) {
+        if (!tags.includes(tag)) {
+          tags.push(tag);
+        }
+      }
+    }
+    return tags;
   }
 
   /** 新增条目（文件夹/文件，按路径去重，一律未分组），成功后触发 onDidChange。 */
@@ -125,24 +166,65 @@ export class FolderStore implements vscode.Disposable {
     return existing.length - updated.length;
   }
 
-  /** 设置条目所属分组（group 传 undefined 表示移出分组）。无实际变化时不写盘、不触发刷新。 */
-  async setItemGroups(uris: readonly vscode.Uri[], group: string | undefined): Promise<number> {
+  /**
+   * 批量字段替换的共享实现：命中条目经 patch 生成新对象，patch 对无变化条目必须原样返回，
+   * 借对象同一性统计实际变化数；无任何变化时不写盘、不触发刷新。返回发生变化的条目数。
+   */
+  private async patchItems(
+    uris: readonly vscode.Uri[],
+    patch: (item: StoredItem) => StoredItem
+  ): Promise<number> {
     const items = await this.getItems();
     const targets = new Set(uris.map((uri) => uri.fsPath));
-    let changed = 0;
-    const updated = items.map((item) => {
-      if (!targets.has(item.path) || item.group === group) {
-        return item;
-      }
-      changed += 1;
-      return group === undefined ? { path: item.path } : { ...item, group };
-    });
+    const updated = items.map((item) => (targets.has(item.path) ? patch(item) : item));
 
+    const changed = updated.filter((item, index) => item !== items[index]).length;
     if (changed === 0) {
       return 0;
     }
     await this.commit(updated);
     return changed;
+  }
+
+  /** 设置条目所属分组（group 传 undefined 表示移出分组）。无实际变化时不写盘、不触发刷新。 */
+  async setItemGroups(uris: readonly vscode.Uri[], group: string | undefined): Promise<number> {
+    return this.patchItems(uris, (item) => {
+      if (item.group === group) {
+        return item;
+      }
+      return group === undefined ? { path: item.path } : { ...item, group };
+    });
+  }
+
+  /** 设置条目标签集合（tags 传 undefined 或空集表示清除全部标签，名称统一 trim、去空、去重）。无实际变化时不写盘、不触发刷新。 */
+  async setItemTags(
+    uris: readonly vscode.Uri[],
+    tags: readonly string[] | undefined
+  ): Promise<number> {
+    const next = normalizeTags(tags);
+    return this.patchItems(uris, (item) => {
+      if (sameTags(item.tags, next)) {
+        return item;
+      }
+      return next === undefined ? { path: item.path } : { ...item, tags: next };
+    });
+  }
+
+  /** 批量为各条目独立设置标签集合（拖拽等按条目计算结果的场景），normalize/sameTags 规则同 setItemTags。无实际变化时不写盘、不触发刷新。 */
+  async applyItemTags(
+    updates: ReadonlyArray<{ uri: vscode.Uri; tags: readonly string[] }>
+  ): Promise<number> {
+    const tagsByPath = new Map(updates.map(({ uri, tags }) => [uri.fsPath, tags]));
+    return this.patchItems(
+      updates.map(({ uri }) => uri),
+      (item) => {
+        const next = normalizeTags(tagsByPath.get(item.path) ?? []);
+        if (sameTags(item.tags, next)) {
+          return item;
+        }
+        return next === undefined ? { path: item.path } : { ...item, tags: next };
+      }
+    );
   }
 
   /** 重命名分组：批量改写所属条目的 group 字段（组的显示位置随首个成员移动）。 */
@@ -180,6 +262,55 @@ export class FolderStore implements vscode.Disposable {
     return changed;
   }
 
+  /** 重命名标签：批量改写所有持有该标签条目的 tags 字段（新名与条目既有标签同名时自然合并去重，保持勾选顺序）。 */
+  async renameTag(oldName: string, newName: string): Promise<number> {
+    if (!newName || oldName === newName) {
+      return 0;
+    }
+
+    const items = await this.getItems();
+    let changed = 0;
+    const updated = items.map((item) => {
+      if (!item.tags?.includes(oldName)) {
+        return item;
+      }
+      const next = [...new Set(item.tags.map((tag) => (tag === oldName ? newName : tag)))];
+      // 条目同时持有新旧两个标签名时改名后集合不变，跳过以免无意义的写盘
+      if (sameTags(item.tags, next)) {
+        return item;
+      }
+      changed += 1;
+      return { ...item, tags: next };
+    });
+
+    if (changed === 0) {
+      return 0;
+    }
+    await this.commit(updated);
+    return changed;
+  }
+
+  /** 删除标签：从所有持有该标签的条目中移除该标签（条目本身保留），标签随之从派生集合中消失。 */
+  async deleteTag(name: string): Promise<number> {
+    const items = await this.getItems();
+    let changed = 0;
+    const updated = items.map((item) => {
+      if (!item.tags?.includes(name)) {
+        return item;
+      }
+      changed += 1;
+      const next = item.tags.filter((tag) => tag !== name);
+      // 命中即必有变化（next 比 item.tags 短）；清空视为无标签，与 setItemTags 的展开规则一致
+      return next.length > 0 ? { ...item, tags: next } : { path: item.path };
+    });
+
+    if (changed === 0) {
+      return 0;
+    }
+    await this.commit(updated);
+    return changed;
+  }
+
   dispose(): void {
     this._onDidChange.dispose();
   }
@@ -211,11 +342,17 @@ export class FolderStore implements vscode.Disposable {
     }
 
     const data = JSON.parse(new TextDecoder().decode(content)) as ConfigFileData;
-    // 边界清洗（手改 JSON 兜底）：group 统一 trim，trim 后为空（空串/纯空白/非字符串）一律视为未分组。
+    // 边界清洗（手改 JSON 兜底）：group 统一 trim，trim 后为空（空串/纯空白/非字符串）一律视为未分组；
+    // tags 逐项 trim、去空、去重，非字符串元素丢弃，清洗后为空视为无标签。
     // 渲染立即正确；脏值不再被原样保留，下一次任意 commit 写盘时整个文件随之洗净
     return (data.items ?? []).map((item) => {
       const group = typeof item.group === 'string' ? item.group.trim() : undefined;
-      return group ? { path: item.path, group } : { path: item.path };
+      const tags = normalizeTags(Array.isArray(item.tags) ? item.tags : undefined);
+      return {
+        path: item.path,
+        ...(group ? { group } : {}),
+        ...(tags ? { tags } : {}),
+      };
     });
   }
 

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { FoldersProvider, UngroupedDecorationProvider } from './foldersProvider';
+import { FoldersProvider, VirtualGroupDecorationProvider } from './foldersProvider';
 import { isManagedEntry } from './foldersProvider/entries';
 import type { Entry } from './foldersProvider/entries';
 import { FoldersDragAndDropController } from './foldersProvider/dragAndDrop';
@@ -54,8 +54,8 @@ export function registerTreeViews(): RegisteredViews {
     updateSelectionMixed(event.selection);
   });
 
-  // 「未分组」虚拟节点弱化着色（与同名真实分组区分）
-  const decorationProvider = vscode.window.registerFileDecorationProvider(new UngroupedDecorationProvider());
+  // 「未分组」「未加标签」虚拟节点弱化着色（与同名真实分组/标签区分）
+  const decorationProvider = vscode.window.registerFileDecorationProvider(new VirtualGroupDecorationProvider());
 
   return {
     disposables: [foldersView, foldersProvider, refreshSubscription, modeSubscription, selectionSubscription, decorationProvider],

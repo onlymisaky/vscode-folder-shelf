@@ -7,13 +7,13 @@ export interface RootBuilder {
   buildRoot(): Promise<Entry[]>;
 }
 
-/** 平铺模式：全部登记条目直接列出（带分组信息以驱动 contextValue） */
+/** 平铺模式：全部登记条目直接列出（带分组与标签信息以驱动 contextValue ） */
 export class FlatRootBuilder implements RootBuilder {
   constructor(private readonly folderStore: FolderStore) { }
 
   async buildRoot(): Promise<Entry[]> {
-    const items = await this.folderStore.getAllWithGroups();
-    return Promise.all(items.map((item) => toNodeEntry(item.uri, item.group)));
+    const items = await this.folderStore.getAllWithMeta();
+    return Promise.all(items.map((item) => toNodeEntry(item.uri, item.group, item.tags)));
   }
 }
 
@@ -23,7 +23,7 @@ export class GroupedRootBuilder implements RootBuilder {
 
   async buildRoot(): Promise<Entry[]> {
     const [items, groups] = await Promise.all([
-      this.folderStore.getAllWithGroups(),
+      this.folderStore.getAllWithMeta(),
       this.folderStore.getGroups(),
     ]);
 
@@ -32,5 +32,21 @@ export class GroupedRootBuilder implements RootBuilder {
     const groupEntries: Entry[] = groups.map((name) => ({ kind: 'group', name }));
     const hasUngrouped = items.some((item) => !item.group || !known.has(item.group));
     return hasUngrouped ? [...groupEntries, { kind: 'ungrouped' }] : groupEntries;
+  }
+}
+
+/** 标签模式：标签节点在前（按首次出现顺序），「未加标签」收尾（存在无标签条目时才显示）。标签由条目派生，不存在悬空标签名 */
+export class TaggedRootBuilder implements RootBuilder {
+  constructor(private readonly folderStore: FolderStore) { }
+
+  async buildRoot(): Promise<Entry[]> {
+    const [items, tags] = await Promise.all([
+      this.folderStore.getAllWithMeta(),
+      this.folderStore.getTags(),
+    ]);
+
+    const tagEntries: Entry[] = tags.map((name) => ({ kind: 'tag', name }));
+    const hasUntagged = items.some((item) => !item.tags?.length);
+    return hasUntagged ? [...tagEntries, { kind: 'untagged' }] : tagEntries;
   }
 }
