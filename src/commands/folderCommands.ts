@@ -5,6 +5,7 @@ import { FolderStore } from '../services/folderStore';
 import { inject } from '../services/container';
 import { isManagedEntry } from '../treeViews/foldersProvider/entries';
 import type { Entry } from '../treeViews/foldersProvider/entries';
+import { showPicker } from '../utils';
 
 /** 当前平台文件管理器相关操作的本地化标签。 */
 interface FileManagerLabels {
@@ -277,9 +278,9 @@ async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): P
 
   const pathName = path.basename(uri.fsPath);
 
-  const choice = await vscode.window.showQuickPick(items, {
+  const choice = await showPicker(items, {
     title: vscode.l10n.t('Open "{0}"', pathName),
-    placeHolder: vscode.l10n.t('Choose how to open this folder'),
+    placeholder: vscode.l10n.t('Choose how to open this folder'),
   });
 
   if (!choice) {
