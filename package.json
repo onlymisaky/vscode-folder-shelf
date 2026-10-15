@@ -2,6 +2,7 @@
   "name": "folder-shelf",
   "displayName": "%folderShelf.displayName%",
   "description": "%folderShelf.description%",
+  "publisher": "onlymisaky",
   "icon": "resources/icon.png",
   "version": "0.0.1",
   "engines": {
@@ -11,6 +12,10 @@
     "Other"
   ],
   "activationEvents": [],
+  "extensionKind": [
+    "ui",
+    "workspace"
+  ],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
   "files": [
@@ -20,7 +25,7 @@
     "package.nls.json",
     "package.nls.zh-cn.json",
     "README.md",
-    "README.en.md"
+    "README.zh-cn.md"
   ],
   "contributes": {
     "commands": [
@@ -353,5 +358,8 @@
     "jiti": "^2.7.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
   }
 }

@@ -36,6 +36,22 @@ export interface MissingEntry {
   readonly kind: 'missing';
 }
 
+/** 配置文件读取失败占位条目：JSON 语法/结构错误时整体替代树根，提示用户修复 */
+export interface ConfigErrorEntry {
+  /** 判别字段：配置文件错误占位 */
+  readonly kind: 'configError';
+}
+
+/** 无效条目汇总占位：配置文件中存在无法渲染的条目（原样保留在文件中，仅不渲染） */
+export interface InvalidEntriesEntry {
+  /** 判别字段：无效条目汇总占位 */
+  readonly kind: 'invalidEntries';
+  /** 无效条目数量 */
+  readonly count: number;
+  /** 逐条 zod issue 文案（tooltip 展示用，渲染时截断） */
+  readonly issues: readonly string[];
+}
+
 /** 分组节点：虚拟条目，名字即分组名（分组由条目 group 字段派生） */
 export interface GroupEntry {
   /** 判别字段：分组节点 */
@@ -69,6 +85,8 @@ export type Entry =
   | NodeEntry
   | PlaceholderEntry
   | MissingEntry
+  | ConfigErrorEntry
+  | InvalidEntriesEntry
   | GroupEntry
   | UngroupedEntry
   | TagEntry

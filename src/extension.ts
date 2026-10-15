@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { registerTreeViews } from './treeViews';
 import { registerCommands } from './commands';
 import { registerServices } from './services';
+import { registerConfigGuide } from './utils/configGuide';
 
 /**
  * 扩展激活入口：注册服务（组合根）→ 注册树视图 → 注册命令，
@@ -18,6 +19,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ...services,
     ...commands,
     ...treeViewDisposables,
+    registerConfigGuide(context.extensionUri),
   );
 }
 

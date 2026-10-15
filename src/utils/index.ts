@@ -69,3 +69,4 @@ export async function confirmDanger(
 }
 
 export * from './quickPick';
+export * from './configError';

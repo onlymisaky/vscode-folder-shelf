@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
-import { ADD_ITEM_COMMAND, OPEN_FILE_COMMAND } from '../../commands';
+import { ADD_ITEM_COMMAND, OPEN_CONFIG_FILE_COMMAND, OPEN_FILE_COMMAND } from '../../commands';
+import { ConfigFileError } from '../../services/configFileError';
 import { FolderStore } from '../../services/folderStore';
 import { ViewMode, ViewModeStore } from '../../services/viewModeStore';
+import { reportConfigFileError } from '../../utils';
 import { GROUP_ICON, TAG_ICON, toNodeEntry } from './entries';
 import type { Entry, NodeEntry } from './entries';
 import { FlatRootBuilder, GroupedRootBuilder, TaggedRootBuilder } from './rootBuilders';
@@ -21,6 +23,9 @@ const UNTAGGED_RESOURCE = vscode.Uri.from({ scheme: UNTAGGED_SCHEME, path: '/unt
 
 /** 虚拟节点行尾 badge 字符：∅ 表达「不属于任何分组/标签」，语言中立且比符号 - 更醒目 */
 const VIRTUAL_BADGE = '∅';
+
+/** 无效条目占位节点 tooltip 中逐条展示的 zod issue 上限，超出部分折叠为省略行 */
+const MAX_SHOWN_ISSUES = 5;
 
 /**
  * 收藏树数据源：按展示模式（平铺/标签/分组）构造根层级，
@@ -91,6 +96,37 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
         vscode.TreeItemCollapsibleState.None
       );
       item.iconPath = new vscode.ThemeIcon('warning');
+      return item;
+    }
+
+    // 配置文件读取失败占位项：JSON 语法/结构错误，单击打开配置文件修复
+    if (element.kind === 'configError') {
+      const item = new vscode.TreeItem(
+        vscode.l10n.t('Config file error'),
+        vscode.TreeItemCollapsibleState.None
+      );
+      item.iconPath = new vscode.ThemeIcon('error');
+      item.tooltip = vscode.l10n.t('The config file failed to load. Click to open it and fix the problem.');
+      item.command = OPEN_CONFIG_FILE_COMMAND.treeItemCommand(
+        vscode.l10n.t('Open Config File')
+      );
+      return item;
+    }
+
+    // 无效条目汇总占位项：配置文件中存在无法渲染的条目（文件内容保持原样，仅不渲染）
+    if (element.kind === 'invalidEntries') {
+      const item = new vscode.TreeItem(
+        vscode.l10n.t('{0} invalid item(s) kept in the config file', element.count),
+        vscode.TreeItemCollapsibleState.None
+      );
+      item.iconPath = new vscode.ThemeIcon('warning');
+      const shown = element.issues.slice(0, MAX_SHOWN_ISSUES);
+      const rest = element.issues.length - shown.length;
+      item.tooltip = [
+        vscode.l10n.t('Invalid items are kept in the config file unchanged:'),
+        ...shown,
+        ...(rest > 0 ? [vscode.l10n.t('…and {0} more', rest)] : []),
+      ].join('\n');
       return item;
     }
 
@@ -181,9 +217,32 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
    * @returns 子条目列表；空列表的根层级返回占位条目，失效目录返回失效占位条目
    */
   async getChildren(element?: Entry): Promise<Entry[]> {
-    // 根层级：按展示模式选择构建策略；结果为空时给出占位提示
+    // 根层级：按展示模式选择构建策略；配置文件损坏时以错误占位替代整棵树并弹窗上报
     if (!element) {
-      const entries = await this.rootBuilder.buildRoot();
+      let entries: Entry[];
+      try {
+        entries = await this.rootBuilder.buildRoot();
+      } catch (error) {
+        if (error instanceof ConfigFileError) {
+          // 异步弹窗不阻塞建树；错误对象在 store 内缓存，期间重渲染不会重复弹窗
+          void reportConfigFileError(error);
+          return [{ kind: 'configError' }];
+        }
+        throw error;
+      }
+
+      // 存在无法渲染的条目：追加汇总占位；列表本就为空时不给「点击添加」占位，避免误导
+      const invalidNotes = this.folderStore.getInvalidNotes();
+      if (invalidNotes.length > 0) {
+        return [
+          ...entries,
+          {
+            kind: 'invalidEntries',
+            count: invalidNotes.length,
+            issues: invalidNotes.map((note) => note.issue),
+          },
+        ];
+      }
       return entries.length > 0 ? entries : [{ kind: 'placeholder' }];
     }
 
@@ -229,7 +288,12 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
     }
 
     // 占位条目为叶子，无子层级
-    if (element.kind === 'placeholder' || element.kind === 'missing') {
+    if (
+      element.kind === 'placeholder' ||
+      element.kind === 'missing' ||
+      element.kind === 'configError' ||
+      element.kind === 'invalidEntries'
+    ) {
       return [];
     }
 

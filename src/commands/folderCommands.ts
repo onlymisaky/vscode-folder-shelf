@@ -159,7 +159,8 @@ export const REMOVE_ITEM_COMMAND = defineCommand(
  *
  * @param uri - 待检查的资源 Uri
  * @param folderStore - 收藏列表存储服务（用户确认移除时调用）
- * @returns 资源存在，或用户确认移除了失效条目时为 true；资源失效且用户取消移除时为 false
+ * @returns 仅资源存在时为 true；资源失效时（无论用户是否确认移除）为 false，
+ *          调用方应终止后续打开流程——条目已从列表移除且磁盘上不存在，没有可打开的对象
  */
 async function checkFolderExistAndRemoveNotFound(uri: vscode.Uri, folderStore: FolderStore): Promise<boolean> {
   const pathName = path.basename(uri.fsPath);
@@ -180,7 +181,6 @@ async function checkFolderExistAndRemoveNotFound(uri: vscode.Uri, folderStore: F
     );
     if (confirmed === REMOVE) {
       await folderStore.remove([uri]);
-      return true;
     }
     return false;
   }

@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
+import { ConfigFileError } from '../../services/configFileError';
 import { FolderStore } from '../../services/folderStore';
 import type { ItemTagUpdate } from '../../services/folderStore';
+import { reportConfigFileError } from '../../utils';
 import { isManagedEntry } from './entries';
 import type { Entry, NodeEntry, TagEntry } from './entries';
 
@@ -75,16 +77,25 @@ export class FoldersDragAndDropController implements vscode.TreeDragAndDropContr
       return;
     }
 
-    if (target?.kind === 'group') {
-      await this.folderStore.setItemGroups(uris, target.name);
-    } else if (target?.kind === 'tag') {
-      await this.dropOnTag(target, entries);
-    } else if (target?.kind === 'untagged') {
-      // 拖到「未加标签」节点：清除全部标签（与「未分组」节点的移出分组对等）
-      await this.folderStore.setItemTags(uris, undefined);
-    } else if (target === undefined || target.kind === 'ungrouped') {
-      // 拖到空白区或「未分组」节点：移出分组
-      await this.folderStore.setItemGroups(uris, undefined);
+    try {
+      if (target?.kind === 'group') {
+        await this.folderStore.setItemGroups(uris, target.name);
+      } else if (target?.kind === 'tag') {
+        await this.dropOnTag(target, entries);
+      } else if (target?.kind === 'untagged') {
+        // 拖到「未加标签」节点：清除全部标签（与「未分组」节点的移出分组对等）
+        await this.folderStore.setItemTags(uris, undefined);
+      } else if (target === undefined || target.kind === 'ungrouped') {
+        // 拖到空白区或「未分组」节点：移出分组
+        await this.folderStore.setItemGroups(uris, undefined);
+      }
+    } catch (error) {
+      // 配置文件损坏期间拒绝写操作（fail-closed）：弹窗上报后放弃本次拖放
+      if (error instanceof ConfigFileError) {
+        await reportConfigFileError(error);
+        return;
+      }
+      throw error;
     }
   }
 

@@ -1,5 +1,7 @@
 
 import * as vscode from 'vscode';
+import { ConfigFileError } from '../services/configFileError';
+import { reportConfigFileError } from '../utils';
 
 /** 本扩展命令 ID 的字面量模板类型：约束 ID 必须以 folderShelf. 为前缀 */
 export type CommandId = `folderShelf.${string}`;
@@ -78,6 +80,25 @@ export function defineCommand<Id extends CommandId, Args extends unknown[] = []>
   ensureCommandId(id);
 
   /**
+   * 执行命令回调并统一处理配置文件错误：配置文件损坏期间命令触发的 ConfigFileError
+   * 经错误弹窗上报（弹窗内部按错误对象去重，同一读取代内只弹一次），
+   * 其余错误原样抛出，保持既有行为。
+   *
+   * @param args - VSCode 透传的命令实参
+   */
+  async function run(...args: Args): Promise<void> {
+    try {
+      await callback(...args);
+    } catch (error) {
+      if (error instanceof ConfigFileError) {
+        await reportConfigFileError(error);
+        return;
+      }
+      throw error;
+    }
+  }
+
+  /**
    * 获取命令 ID。
    *
    * @returns 当前命令的完整 ID 字符串
@@ -118,7 +139,7 @@ export function defineCommand<Id extends CommandId, Args extends unknown[] = []>
 
   return {
     id,
-    callback,
+    callback: run,
     useCommand,
     treeItemCommand: (title: string, ...args: Args) => useCommand(title, ...args),
   };

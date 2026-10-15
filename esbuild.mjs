@@ -34,6 +34,8 @@ const options = {
   format: 'cjs',
   platform: 'node',
   target: 'node20',
+  charset: 'utf8',
+  loader: { '.md': 'text' },
   sourcemap: watch ? false : true,
   minify: watch ? false : true,
   logLevel: 'info',
