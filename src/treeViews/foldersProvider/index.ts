@@ -3,7 +3,7 @@ import { ADD_ITEM_COMMAND, OPEN_CONFIG_FILE_COMMAND, OPEN_FILE_COMMAND } from '.
 import { ConfigFileError } from '../../services/configFileError';
 import { FolderStore } from '../../services/folderStore';
 import { ViewMode, ViewModeStore } from '../../services/viewModeStore';
-import { reportConfigFileError } from '../../utils';
+import { isFsAccessible, reportConfigFileError } from '../../utils';
 import { GROUP_ICON, TAG_ICON, toNodeEntry } from './entries';
 import type { Entry, NodeEntry } from './entries';
 import { FlatRootBuilder, GroupedRootBuilder, TaggedRootBuilder } from './rootBuilders';
@@ -99,6 +99,18 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
       return item;
     }
 
+    // 不可访问占位项：资源当前无法访问（如远程未连接、虚拟文件系统提供程序缺失），
+    // 与「磁盘上不存在」区分——不可验证不等于不存在。单击引导建连后即可正常浏览：
+    // workspace.fs 不会为未连接的远端发起连接，无法原地浏览，打开目录是生态标准做法
+    if (element.kind === 'unavailable') {
+      const item = new vscode.TreeItem(
+        vscode.l10n.t('Item is currently unavailable'),
+        vscode.TreeItemCollapsibleState.None
+      );
+      item.iconPath = new vscode.ThemeIcon('warning');
+      return item;
+    }
+
     // 配置文件读取失败占位项：JSON 语法/结构错误，单击打开配置文件修复
     if (element.kind === 'configError') {
       const item = new vscode.TreeItem(
@@ -173,10 +185,20 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
     }
 
     const isDirectory = element.type === vscode.FileType.Directory;
+    // 不可在当前窗口发起 fs 调用的目录（本地窗口中的远程条目 / 跨 authority 的远程条目）
+    // 直接渲染为叶子、不提供展开功能：避免展开触发透传读取（读到错误机器的同名路径）；
+    // 单击行转入建连引导。vscode-vfs 不在此列——展开触发的提供程序激活可能使其恢复可用
+    const expandable = isDirectory && isFsAccessible(element.uri);
     const item = new vscode.TreeItem(
       element.uri,
-      isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+      expandable ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
     );
+
+    // 被禁用展开的目录：显式指定文件夹图标——无展开状态时图标主题会按「文件」解析
+    // resourceUri 的图标；无法浏览的原因由 tooltip 承载（悬浮可见），单击行引导建连
+    if (isDirectory && !expandable) {
+      item.iconPath = new vscode.ThemeIcon('folder');
+    }
 
     // 文件条目绑定单击命令，实现点击预览
     if (!isDirectory) {
@@ -191,10 +213,12 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
     // 打开文件夹操作由条目右侧的 inline 图标触发（view/item/context inline group），不绑定行单击命令
     if (element.managed) {
       const base = isDirectory ? 'folders.folder' : 'folders.file';
-      // 已分组/已加标签条目依次追加 .grouped/.tagged 后缀，供「移出分组」「管理标签」等菜单做 when 过滤
+      // 依次追加 .grouped/.tagged 后缀，供「移出分组」「管理标签」等菜单做 when 过滤；
+      // 不可访问的目录（渲染为叶子）追加 .inaccessible，供行内提示图标做 when 过滤
+      const inaccessible = isDirectory && !expandable ? '.inaccessible' : '';
       item.contextValue = element.group
-        ? `${base}.grouped${element.tags?.length ? '.tagged' : ''}`
-        : `${base}${element.tags?.length ? '.tagged' : ''}`;
+        ? `${base}.grouped${element.tags?.length ? '.tagged' : ''}${inaccessible}`
+        : `${base}${element.tags?.length ? '.tagged' : ''}${inaccessible}`;
     }
 
     return item;
@@ -291,6 +315,7 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
     if (
       element.kind === 'placeholder' ||
       element.kind === 'missing' ||
+      element.kind === 'unavailable' ||
       element.kind === 'configError' ||
       element.kind === 'invalidEntries'
     ) {
@@ -298,11 +323,23 @@ export class FoldersProvider implements vscode.TreeDataProvider<Entry> {
     }
 
     const parentUri = element.uri;
+
+    // 兜底守卫：渲染层已对不可访问的目录禁用展开，正常不会走到这里（vfs 的 ENOPRO
+    // 由下方 catch 处理）；保留以防渲染与展开之间状态变化（如工作区根目录变动）
+    if (!isFsAccessible(parentUri)) {
+      return [{ kind: 'unavailable', uri: parentUri }];
+    }
+
     let entries: Array<[string, vscode.FileType]>;
 
     try {
       entries = await vscode.workspace.fs.readDirectory(parentUri);
     } catch (error) {
+      // 提供程序不可用（ENOPRO，如远程未连接）：以不可访问占位替代（携带 uri 供占位行单击建连），
+      // 不让整棵树抛错、也不误报为失效
+      if (error instanceof vscode.FileSystemError && error.code === 'Unavailable') {
+        return [{ kind: 'unavailable', uri: parentUri }];
+      }
       // 目录已被删除/移动时展示失效占位项，而不是让整个树抛错
       if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') {
         return [{ kind: 'missing' }];

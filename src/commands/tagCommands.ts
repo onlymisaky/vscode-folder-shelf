@@ -43,9 +43,9 @@ async function pickAndSetTags(
     folderStore.getTags(),
     folderStore.getAllWithMeta(),
   ]);
-  const tagsByPath = new Map(allMeta.map((meta) => [meta.uri.fsPath, meta.tags]));
+  const tagsByPath = new Map(allMeta.map((meta) => [meta.uri.toString(), meta.tags]));
   // 预勾选 = 所有选中条目标签的并集（单选即该条目自身标签），避免「未编辑直接确认」误清空
-  const currentTags = [...new Set(targets.flatMap((uri) => tagsByPath.get(uri.fsPath) ?? []))];
+  const currentTags = [...new Set(targets.flatMap((uri) => tagsByPath.get(uri.toString()) ?? []))];
 
   // 行全集：行对象挂 tagName，结果按行对象回传后取回标签名；预勾选直接传名字集合（label 即名字域）
   const items: TagPickItem[] = existingTags.map((name) => ({

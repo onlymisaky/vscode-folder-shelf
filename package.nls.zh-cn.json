@@ -1,11 +1,12 @@
 {
-  "folderShelf.displayName": "文件夹书架",
+  "folderShelf.displayName": "Folder Shelf",
   "folderShelf.description": "在侧边栏收藏常用文件夹和文件，单击即可打开。",
   "folderShelf.container.title": "文件夹书架",
   "folderShelf.openFile.title": "打开文件",
   "folderShelf.addItem.title": "添加文件夹或文件",
   "folderShelf.addCurrentProject.title": "添加当前项目",
   "folderShelf.openFolder.title": "打开项目",
+  "folderShelf.unavailableHint.title": "该条目位于远程或虚拟文件系统上，需要 VS Code 建立连接后才能浏览其内容。",
   "folderShelf.removeItem.title": "移除",
   "folderShelf.showGrouped.title": "以分组展示",
   "folderShelf.showTagged.title": "以标签展示",

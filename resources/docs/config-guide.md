@@ -29,8 +29,8 @@ The top level must be a JSON object; an array or a primitive value is treated as
 Legal values for `path`: any non-empty string.
 
 - **Local absolute paths** (e.g. `/Users/you/projects/demo`) — recommended; icons, child levels and existence checks work as expected
-- Relative paths, `~/...`, custom URIs (e.g. `vscode-remote://...`) — allowed to register,
-  but entries that cannot be resolved against the local disk show an "Item is missing on disk" placeholder
+- **Remote / virtual file system URIs** (e.g. `vscode-remote://ssh-host/Users/you/projects/demo`, `vscode-vfs://github/owner/repo`) — fully supported; an "Item is currently unavailable" placeholder is shown while the remote is not connected or the provider is missing
+- Relative paths, `~/...` — allowed to register, but entries that cannot be resolved against the local disk show an "Item is missing on disk" placeholder
 
 Items whose `path` is missing, not a string, or an empty string are treated as **invalid items**: they are not rendered,
 an "N invalid item(s)" node is shown at the end of the tree (hover for details), and they are preserved as-is on write-back.

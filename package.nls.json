@@ -6,6 +6,7 @@
   "folderShelf.addItem.title": "Add Folder or File",
   "folderShelf.addCurrentProject.title": "Add Current Project",
   "folderShelf.openFolder.title": "Open Project",
+  "folderShelf.unavailableHint.title": "The item is on a remote or virtual file system. Its contents can only be browsed after VS Code connects to it.",
   "folderShelf.removeItem.title": "Remove",
   "folderShelf.showGrouped.title": "Show in Groups",
   "folderShelf.showTagged.title": "Show by Tags",

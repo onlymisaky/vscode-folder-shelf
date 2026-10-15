@@ -10,6 +10,7 @@
   "No items added yet. Click to add one.": "No items added yet. Click to add one.",
   "Add": "Add",
   "Item is missing on disk": "Item is missing on disk",
+  "Item is currently unavailable": "Item is currently unavailable",
   "Config file error": "Config file error",
   "The config file failed to load. Click to open it and fix the problem.": "The config file failed to load. Click to open it and fix the problem.",
   "{0} invalid item(s) kept in the config file": "{0} invalid item(s) kept in the config file",

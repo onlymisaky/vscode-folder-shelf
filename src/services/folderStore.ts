@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ConfigFileError } from './configFileError';
 import { itemSchema, rawFileSchema, formatIssues, topLevelErrorKind } from './configSchema';
 import type { UsableItem } from './configSchema';
+import { itemUriOf, itemPathOf } from '../utils';
 
 /** 携带分组与标签信息的条目视图（getAllWithMeta 返回） */
 export interface ItemMeta {
@@ -97,15 +98,16 @@ function usablePath(raw: unknown): string | undefined {
 }
 
 /**
- * 条目路径与菜单回传 Uri 之间的同一性桥接：Uri.file 会为相对路径补前导斜杠，
- * 树侧 uri 由 Uri.file(路径) 构造，因此存储侧匹配必须经过同一推导，
- * 否则相对路径条目在移除/改组/打标签/去重时无法命中（绝对路径推导前后不变，行为不受影响）。
+ * 条目路径与菜单回传 Uri 之间的同一性桥接：所有侧（存储匹配、命令去重、命令定位）
+ * 统一以「path → Uri → 规范化字符串」为匹配键——file 条目经 Uri.file 推导（相对路径
+ * 会补前导斜杠，推导前后一致），虚拟协议条目经 Uri.parse 后 toString 归一
+ * （authority 的 %2B 等编码形态与未编码书写归一到相同键）。
  *
  * @param p - usablePath 产出的原始条目路径
- * @returns 与树侧 uri.fsPath 一致的匹配键
+ * @returns 与树侧 uri.toString() 一致的匹配键
  */
-function fsPathOf(p: string): string {
-  return vscode.Uri.file(p).fsPath;
+function keyOf(p: string): string {
+  return itemUriOf(p).toString();
 }
 
 /**
@@ -244,7 +246,7 @@ export class FolderStore implements vscode.Disposable {
     const items = await this.getRawItems();
     return items.flatMap((item) => {
       const p = usablePath(item);
-      return p === undefined ? [] : [vscode.Uri.file(p)];
+      return p === undefined ? [] : [itemUriOf(p)];
     });
   }
 
@@ -261,7 +263,7 @@ export class FolderStore implements vscode.Disposable {
         return [];
       }
       return [{
-        uri: vscode.Uri.file(p),
+        uri: itemUriOf(p),
         group: groupOf(item),
         tags: displayTags(rawTagsOf(item)),
       }];
@@ -314,21 +316,21 @@ export class FolderStore implements vscode.Disposable {
   /**
    * 新增条目（文件夹/文件，按路径去重，一律未分组）。
    *
-   * @param uris - 待添加的资源 Uri 列表；与已登记条目 fsPath 相同的会被跳过
+   * @param uris - 待添加的资源 Uri 列表；与已登记条目同一路径（uri 规范串相同）的会被跳过
    * @returns added 为实际新增数，skipped 为因重复被跳过的数量；无新增时不写盘、不触发 onDidChange
    */
   async add(uris: readonly vscode.Uri[]): Promise<AddItemsResult> {
     const items = await this.getRawItems();
     const known = new Set(items.flatMap((item) => {
       const p = usablePath(item);
-      return p === undefined ? [] : [fsPathOf(p)];
+      return p === undefined ? [] : [keyOf(p)];
     }));
     const added: vscode.Uri[] = [];
     for (const uri of uris) {
-      if (known.has(uri.fsPath)) {
+      if (known.has(uri.toString())) {
         continue;
       }
-      known.add(uri.fsPath);
+      known.add(uri.toString());
       added.push(uri);
     }
 
@@ -336,7 +338,7 @@ export class FolderStore implements vscode.Disposable {
       return { added: 0, skipped: uris.length };
     }
 
-    await this.commit([...items, ...added.map((uri) => ({ path: uri.fsPath }))]);
+    await this.commit([...items, ...added.map((uri) => ({ path: itemPathOf(uri) }))]);
     return { added: added.length, skipped: uris.length - added.length };
   }
 
@@ -349,10 +351,10 @@ export class FolderStore implements vscode.Disposable {
    */
   async remove(uris: readonly vscode.Uri[]): Promise<number> {
     const items = await this.getRawItems();
-    const doomed = new Set(uris.map((uri) => uri.fsPath));
+    const doomed = new Set(uris.map((uri) => uri.toString()));
     const updated = items.filter((item) => {
       const p = usablePath(item);
-      return p === undefined || !doomed.has(fsPathOf(p));
+      return p === undefined || !doomed.has(keyOf(p));
     });
     if (updated.length === items.length) {
       return 0;
@@ -375,10 +377,10 @@ export class FolderStore implements vscode.Disposable {
     patch: (item: UsableItem) => UsableItem
   ): Promise<number> {
     const items = await this.getRawItems();
-    const targets = new Set(uris.map((uri) => uri.fsPath));
+    const targets = new Set(uris.map((uri) => uri.toString()));
     const updated = items.map((item) => {
       const p = usablePath(item);
-      return p !== undefined && targets.has(fsPathOf(p)) ? patch(item as UsableItem) : item;
+      return p !== undefined && targets.has(keyOf(p)) ? patch(item as UsableItem) : item;
     });
 
     const changed = updated.filter((item, index) => item !== items[index]).length;
@@ -434,11 +436,11 @@ export class FolderStore implements vscode.Disposable {
   async applyItemTags(
     updates: readonly ItemTagUpdate[]
   ): Promise<number> {
-    const tagsByPath = new Map(updates.map(({ uri, tags }) => [uri.fsPath, tags]));
+    const tagsByPath = new Map(updates.map(({ uri, tags }) => [uri.toString(), tags]));
     return this.patchItems(
       updates.map(({ uri }) => uri),
       (item) => {
-        const next = normalizeTags(tagsByPath.get(item.path) ?? []);
+        const next = normalizeTags(tagsByPath.get(keyOf(item.path)) ?? []);
         if (sameItemTags(item, next)) {
           return item;
         }

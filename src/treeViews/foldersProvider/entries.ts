@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { isFsAccessible } from '../../utils';
 
 /**
  * Folders 视图的条目数据模型（Entry 词汇表）：类型、类型守卫、构造工厂与跨模块共享常量。
@@ -34,6 +35,14 @@ export interface PlaceholderEntry {
 export interface MissingEntry {
   /** 判别字段：磁盘失效占位 */
   readonly kind: 'missing';
+}
+
+/** 资源当前不可访问时展示的占位条目（如远程未连接、虚拟文件系统提供程序缺失） */
+export interface UnavailableEntry {
+  /** 判别字段：资源不可访问占位 */
+  readonly kind: 'unavailable';
+  /** 不可访问的资源 Uri：单击占位行时据此发起打开/建连流程 */
+  readonly uri: vscode.Uri;
 }
 
 /** 配置文件读取失败占位条目：JSON 语法/结构错误时整体替代树根，提示用户修复 */
@@ -85,6 +94,7 @@ export type Entry =
   | NodeEntry
   | PlaceholderEntry
   | MissingEntry
+  | UnavailableEntry
   | ConfigErrorEntry
   | InvalidEntriesEntry
   | GroupEntry
@@ -146,13 +156,17 @@ export function isTagEntry(value: unknown): value is TagEntry {
  */
 export async function toNodeEntry(uri: vscode.Uri, group?: string, tags?: string[], underTag?: string): Promise<NodeEntry> {
   let type = vscode.FileType.Directory;
-  try {
-    const stat = await vscode.workspace.fs.stat(uri);
-    type = (stat.type & vscode.FileType.Directory) !== 0
-      ? vscode.FileType.Directory
-      : vscode.FileType.File;
-  } catch {
-    // stat 失败（已删除/移动）时按目录兜底，保持与既有失效文件夹一致的展示
+  // 跨 authority 的远程资源不发起 stat：透传会读到错误机器的同名路径，按目录兜底，
+  // 展开时由 getChildren 的守卫以「不可访问」占位呈现
+  if (isFsAccessible(uri)) {
+    try {
+      const stat = await vscode.workspace.fs.stat(uri);
+      type = (stat.type & vscode.FileType.Directory) !== 0
+        ? vscode.FileType.Directory
+        : vscode.FileType.File;
+    } catch {
+      // stat 失败（已删除/移动）时按目录兜底，保持与既有失效文件夹一致的展示
+    }
   }
   return { kind: 'node', uri, type, managed: true, group, tags, ...(underTag ? { underTag } : {}) };
 }

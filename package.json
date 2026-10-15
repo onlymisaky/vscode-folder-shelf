@@ -49,6 +49,11 @@
         "icon": "$(open-in-product)"
       },
       {
+        "command": "folderShelf.unavailableHint",
+        "title": "%folderShelf.unavailableHint.title%",
+        "icon": "$(info)"
+      },
+      {
         "command": "folderShelf.openConfigFile",
         "title": "%folderShelf.openConfigFile.title%",
         "icon": "$(json)"
@@ -129,6 +134,10 @@
         },
         {
           "command": "folderShelf.openFolder",
+          "when": "false"
+        },
+        {
+          "command": "folderShelf.unavailableHint",
           "when": "false"
         },
         {
@@ -224,28 +233,33 @@
       ],
       "view/item/context": [
         {
+          "command": "folderShelf.unavailableHint",
+          "when": "view == folderShelf.views.folders && viewItem =~ /\\.inaccessible$/",
+          "group": "inline@1"
+        },
+        {
           "command": "folderShelf.openFolder",
           "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.folder/",
-          "group": "inline"
+          "group": "inline@2"
         },
         {
           "command": "folderShelf.moveToGroup",
-          "when": "view == folderShelf.views.folders && (viewItem =~ /^folders\\.(folder|file)(\\.tagged)?$/ || (folderShelf.selectionMixed && viewItem =~ /^folders\\.(folder|file)(\\.grouped)?(\\.tagged)?$/))",
+          "when": "view == folderShelf.views.folders && (viewItem =~ /^folders\\.(folder|file)(\\.tagged)?(\\.inaccessible)?$/ || (folderShelf.selectionMixed && viewItem =~ /^folders\\.(folder|file)(\\.grouped)?(\\.tagged)?(\\.inaccessible)?$/))",
           "group": "9_folderShelf@1"
         },
         {
           "submenu": "folderShelf.group",
-          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped(\\.tagged)?$/ && !folderShelf.selectionMixed",
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped(\\.tagged)?(\\.inaccessible)?$/ && !folderShelf.selectionMixed",
           "group": "9_folderShelf@1"
         },
         {
           "command": "folderShelf.addTag",
-          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)(\\.grouped)?$/",
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)(\\.grouped)?(\\.inaccessible)?$/",
           "group": "9_folderShelf@2"
         },
         {
           "command": "folderShelf.manageTags",
-          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)(\\.grouped)?\\.tagged$/",
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)(\\.grouped)?\\.tagged(\\.inaccessible)?$/",
           "group": "9_folderShelf@2"
         },
         {
@@ -277,12 +291,12 @@
       "folderShelf.group": [
         {
           "command": "folderShelf.moveToGroup",
-          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped(\\.tagged)?$/",
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped(\\.tagged)?(\\.inaccessible)?$/",
           "group": "1_folderShelf@1"
         },
         {
           "command": "folderShelf.moveOutOfGroup",
-          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped(\\.tagged)?$/",
+          "when": "view == folderShelf.views.folders && viewItem =~ /^folders\\.(folder|file)\\.grouped(\\.tagged)?(\\.inaccessible)?$/",
           "group": "1_folderShelf@2"
         }
       ]

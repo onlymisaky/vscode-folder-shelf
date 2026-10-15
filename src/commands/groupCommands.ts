@@ -121,8 +121,8 @@ export const MOVE_TO_GROUP_COMMAND = defineCommand(
 
     // 仅当选中项中存在已分组条目时才提供「移出分组」
     const withGroups = await folderStore.getAllWithMeta();
-    const groupByPath = new Map(withGroups.map((entry) => [entry.uri.fsPath, entry.group]));
-    const hasGrouped = targets.some((uri) => groupByPath.get(uri.fsPath) !== undefined);
+    const groupByPath = new Map(withGroups.map((entry) => [entry.uri.toString(), entry.group]));
+    const hasGrouped = targets.some((uri) => groupByPath.get(uri.toString()) !== undefined);
     /** 附加动作项：把选中条目移出所在分组 */
     const MOVE_OUT_OF_GROUP_ITEM: vscode.QuickPickItem = {
       label: vscode.l10n.t('Remove from Group'),

@@ -10,6 +10,7 @@
   "No items added yet. Click to add one.": "还没有添加项目，点击添加",
   "Add": "添加",
   "Item is missing on disk": "条目在磁盘上不存在",
+  "Item is currently unavailable": "条目当前不可访问",
   "Config file error": "配置文件错误",
   "The config file failed to load. Click to open it and fix the problem.": "配置文件加载失败，点击打开并修复问题。",
   "{0} invalid item(s) kept in the config file": "{0} 个无效条目已在配置文件中保留",
