@@ -7,19 +7,20 @@ import { isManagedEntry } from '../treeViews/foldersProvider/entries';
 import type { Entry } from '../treeViews/foldersProvider/entries';
 import { showPicker, isSupportedScheme, getUriCwd, isFsAccessible } from '../utils';
 
-/** 当前平台文件管理器相关操作的本地化标签。 */
+/** 当前平台文件管理器操作的本地化标签。 */
 interface FileManagerLabels {
-  /** 在父目录中定位并选中目标资源的操作标签 */
+  /** 在父目录中定位并选中目标资源的操作标签。 */
   readonly reveal: string;
-  /** 直接在系统文件管理器中打开目标目录的操作标签 */
+  /** 直接在系统文件管理器中打开目标目录的操作标签。 */
   readonly open: string;
 }
 
 /**
- * 加入列表并提示被跳过的重复项（addItem 与「添加当前项目」共用）。
+ * 将资源加入列表，并提示因重复而跳过的数量。
  *
- * @param folderStore - 收藏列表存储服务（经容器注入）
- * @param uris - 待添加的资源 Uri 列表
+ * @param folderStore - 列表存储服务
+ * @param uris - 待添加的资源 URI
+ * @returns 表示添加和提示均已完成的 Promise
  */
 async function addAndReportSkipped(
   folderStore: FolderStore,
@@ -36,6 +37,8 @@ async function addAndReportSkipped(
 /**
  * 打开文件选择对话框添加文件夹/文件（视图标题栏「添加」按钮触发）。
  * 支持文件与文件夹混合多选；重复项自动跳过并提示数量。
+ *
+ * @returns 表示用户已完成或取消选择的 Promise
  */
 export const ADD_ITEM_COMMAND = defineCommand('folderShelf.addItem', async () => {
   const folderStore = inject(FolderStore);
@@ -56,9 +59,10 @@ export const ADD_ITEM_COMMAND = defineCommand('folderShelf.addItem', async () =>
 })
 
 /**
- * 将当前窗口打开的项目加入列表（多根工作区取全部根文件夹）。
- * 由视图标题栏按钮或命令面板触发；过滤掉 untitled 等非文件系统目录，
- * 纳入远程（vscode-remote）与虚拟文件系统（vscode-vfs）工作区。
+ * 将当前窗口的所有受支持工作区根目录加入列表。本地、远程和虚拟文件系统
+ * 工作区均受支持，其他 URI 协议会被忽略。
+ *
+ * @returns 表示添加和提示均已完成的 Promise
  */
 export const ADD_CURRENT_PROJECT_COMMAND = defineCommand(
   'folderShelf.addCurrentProject',
@@ -81,16 +85,16 @@ export const ADD_CURRENT_PROJECT_COMMAND = defineCommand(
 );
 
 /**
- * 重新加载 config.json：文件可能在外部被修改，丢弃缓存并触发视图刷新。
+ * 丢弃配置缓存并刷新树。
  */
 export const REFRESH_COMMAND = defineCommand('folderShelf.refresh', () => {
   inject(FolderStore).refresh();
 });
 
 /**
- * 一键折叠视图中的全部目录。
- * VSCode 会为每个 createTreeView 注册内部命令
- * `workbench.actions.treeView.<viewId>.collapseAll`，直接转发即可。
+ * 通过 VS Code 的树视图命令折叠树中的所有目录。
+ *
+ * @returns 表示折叠命令已执行的 Promise
  */
 export const COLLAPSE_ALL_COMMAND = defineCommand('folderShelf.collapseAll', async () => {
   await vscode.commands.executeCommand(
@@ -99,12 +103,11 @@ export const COLLAPSE_ALL_COMMAND = defineCommand('folderShelf.collapseAll', asy
 });
 
 /**
- * 从菜单或 inline 图标回传的参数中提取登记条目，并按 uri 规范串去重。
- * VSCode 回传 getChildren 产生的 Entry；多选时第二个参数为当前 selection。
+ * 从菜单参数中提取受管理节点，并按规范化 URI 去重。
  *
- * @param item - 触发菜单的树条目（单选时的目标）
- * @param selectedItems - 多选时 VSCode 额外回传的当前 selection 数组
- * @returns 目标条目的 Uri 列表（按 uri 规范串去重、保持出现顺序）；无有效目标时为空数组
+ * @param item - 触发菜单的树条目
+ * @param selectedItems - 多选时的完整选择
+ * @returns 去重且保持出现顺序的资源 URI
  */
 export function collectManagedUris(item?: Entry, selectedItems?: readonly Entry[]): vscode.Uri[] {
   const uris = new Map<string, vscode.Uri>();
@@ -117,11 +120,11 @@ export function collectManagedUris(item?: Entry, selectedItems?: readonly Entry[
 }
 
 /**
- * 移除登记的文件夹/文件：从树条目右键菜单触发，仅从列表移除（不影响磁盘文件）。
- * 目标从菜单回传参数解析（多选时 VSCode 回传 (item, selectedItems)），确认后批量移除。
+ * 经用户确认后从列表移除所选条目，不删除磁盘资源。
  *
  * @param item - 触发菜单的树条目
- * @param selectedItems - 多选时的 selection 数组
+ * @param selectedItems - 多选时的完整选择
+ * @returns 表示用户已取消或条目已移除的 Promise
  */
 export const REMOVE_ITEM_COMMAND = defineCommand(
   'folderShelf.removeItem',
@@ -156,18 +159,15 @@ export const REMOVE_ITEM_COMMAND = defineCommand(
 );
 
 /**
- * 检查文件夹是否存在；不存在时弹窗引导用户从列表移除（其他错误原样抛出）。
- * 资源当前不可验证（远程未连接 / 虚拟文件系统提供程序缺失，ENOPRO）时视为可通过：
- * 不可验证不等于不存在，不放行的话远程条目在本地窗口永远无法发起打开。
+ * 检查目录是否存在。确认不存在时询问是否从列表移除；当前窗口无法访问的
+ * 远程或虚拟资源继续进入打开流程，由 VS Code 建立连接或激活文件系统提供程序。
  *
- * @param uri - 待检查的资源 Uri
- * @param folderStore - 收藏列表存储服务（用户确认移除时调用）
- * @returns 仅资源确认存在或不可验证时为 true；资源确认失效时（无论用户是否确认移除）为 false，
- *          调用方应终止后续打开流程——条目已从列表移除且磁盘上不存在，没有可打开的对象
+ * @param uri - 待检查的目录 URI
+ * @param folderStore - 用户确认后用于移除条目的存储服务
+ * @returns 资源存在或当前无法验证时为 `true`；确认不存在时为 `false`
  */
 async function checkFolderExistAndRemoveNotFound(uri: vscode.Uri, folderStore: FolderStore): Promise<boolean> {
-  // 跨 authority 的远程资源不发起 fs 调用（透传会读到错误机器的同名路径或误报失效）：
-  // 视为可通过，交给后续打开流程（vscode.openFolder 会建立对应连接）
+  // 其他远程连接的资源交给 `vscode.openFolder` 建立连接，不在当前连接中探测。
   if (!isFsAccessible(uri)) {
     return true;
   }
@@ -176,11 +176,11 @@ async function checkFolderExistAndRemoveNotFound(uri: vscode.Uri, folderStore: F
     await vscode.workspace.fs.stat(uri);
     return true;
   } catch (error) {
-    // 提供程序不可用（ENOPRO）：存在性无法验证，放行后续打开流程（如 vscode.openFolder 会先建立远程连接）
+    // 文件系统提供程序不可用不代表资源不存在，继续尝试打开。
     if (error instanceof vscode.FileSystemError && error.code === 'Unavailable') {
       return true;
     }
-    // 仅文件不存在才引导移除，其余错误（权限等）原样抛出
+    // 只有确认不存在时才建议移除；权限等错误继续抛出。
     if (!(error instanceof vscode.FileSystemError && error.code === 'FileNotFound')) {
       throw error;
     }
@@ -199,11 +199,10 @@ async function checkFolderExistAndRemoveNotFound(uri: vscode.Uri, folderStore: F
 }
 
 /**
- * 系统文件管理器「定位 / 打开」两项标签，按平台区分命名：
- * macOS 为 Finder，Windows 为文件资源管理器，Linux 无统一名称泛称文件管理器。
- * 各分支均为静态字面量，保证 l10n 提取完整。
+ * 返回符合当前操作系统用语的“定位”和“打开”标签。各分支使用静态字符串，
+ * 使本地化提取器能够识别所有文案。
  *
- * @returns reveal 为「定位到该文件夹」标签，open 为「直接打开该文件夹」标签（均已经 l10n 翻译）
+ * @returns 文件管理器操作标签
  */
 function fileManagerLabels(): FileManagerLabels {
   if (process.platform === 'darwin') {
@@ -222,59 +221,52 @@ function fileManagerLabels(): FileManagerLabels {
 }
 
 /**
- * 打开前检查磁盘状态（失效时引导移除），随后 QuickPick 选择打开方式
- * （当前窗口 / 新窗口 / 终端 / 调试终端 / 文件管理器）。
+ * 检查目录状态，并让用户选择在窗口、终端或系统文件管理器中打开。
  *
- * @param uri - 待打开的文件夹 Uri
- * @param folderStore - 收藏列表存储服务（失效条目移除时使用）
+ * @param uri - 待打开目录的 URI
+ * @param folderStore - 确认目录缺失时用于移除条目的存储服务
+ * @returns 表示用户已取消或打开操作已完成的 Promise
  */
 async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): Promise<void> {
   if (!await checkFolderExistAndRemoveNotFound(uri, folderStore)) {
     return;
   }
 
-  // 当前窗口打开
+  // 窗口打开方式对所有支持的 URI 协议可用。
   const CURRENT: vscode.QuickPickItem = {
     label: vscode.l10n.t('Open in This Window'),
     description: vscode.workspace.name,
     iconPath: new vscode.ThemeIcon('window'),
   };
 
-  // 新窗口打开
   const NEW_WINDOW: vscode.QuickPickItem = {
     label: vscode.l10n.t('Open in New Window'),
     iconPath: new vscode.ThemeIcon('empty-window'),
   };
 
-  // 在 VSCode 集成终端中打开
+  // 终端和系统文件管理器选项会在下方按 URI 协议筛选。
   const TERMINAL: vscode.QuickPickItem = {
     label: vscode.l10n.t('Open in Terminal'),
     iconPath: new vscode.ThemeIcon('terminal'),
   };
 
-  // 在调试终端（JavaScript Debug Terminal）中打开
   const DEBUG_TERMINAL: vscode.QuickPickItem = {
     label: vscode.l10n.t('Open in Debug Terminal'),
     iconPath: new vscode.ThemeIcon('debug'),
   };
 
-  // 在系统文件管理器中定位：打开父级目录并选中该文件夹
   const { reveal: REVEAL_LABEL, open: OPEN_LABEL } = fileManagerLabels();
   const REVEAL_IN_FILE_MANAGER: vscode.QuickPickItem = {
     label: REVEAL_LABEL,
     iconPath: new vscode.ThemeIcon('folder-opened'),
   };
 
-  // 在系统文件管理器中直接打开该文件夹
   const OPEN_IN_FILE_MANAGER: vscode.QuickPickItem = {
     label: OPEN_LABEL,
     iconPath: new vscode.ThemeIcon('link-external'),
   };
 
-  // 按协议与连接能力裁剪打开选项：本地文件系统相关操作仅对 file 协议有意义；
-  // vscode-vfs 等虚拟文件系统无终端能力；终端由本地或当前连接的远端 pty 宿主创建，
-  // 仅在可安全发起 fs 调用（远程条目已连接对应 authority）时提供——未连接时请求会
-  // 落到本地 pty，远程路径无法解析，启动失败或退回默认目录
+  // 本地资源支持所有打开方式；远程资源只有连接到当前窗口时才能创建终端。
   const items: vscode.QuickPickItem[] = [CURRENT, NEW_WINDOW];
   if (uri.scheme === 'file') {
     items.push(TERMINAL, DEBUG_TERMINAL, REVEAL_IN_FILE_MANAGER, OPEN_IN_FILE_MANAGER);
@@ -282,7 +274,7 @@ async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): P
     items.push(TERMINAL, DEBUG_TERMINAL);
   }
 
-  // 预留功能：将目录添加到当前多根工作区。当前不向用户展示，保留实现供后续开放
+  // 工作区添加选项尚未开放；保留分支便于后续启用。
   if (vscode.workspace.workspaceFolders?.length && false) {
     items.push({
       label: vscode.l10n.t('Add to Workspace'),
@@ -316,10 +308,7 @@ async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): P
   }
 
   if (choice === DEBUG_TERMINAL) {
-    // js-debug 内置命令，参数形态与其内部目录选择流程一致：第三参传 { cwd }。
-    // cwd 必须为纯路径字符串：js-debug 将其展开进 node-terminal 启动配置后经 DAP（JSON）
-    // 传给调试适配器发起 runInTerminal，Uri 对象无法安全通过（内部流程亦传字符串）。
-    // vscode-remote 的 fsPath 即远端路径，由远端宿主的 js-debug 以其创建终端。
+    // js-debug 通过 DAP 传递启动参数，因此 `cwd` 必须使用可序列化的路径字符串。
     await vscode.commands.executeCommand(
       'extension.js-debug.createDebuggerTerminal',
       undefined,
@@ -339,7 +328,7 @@ async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): P
     return;
   }
 
-  // 仅对应上方当前禁用的「添加到工作区」选项
+  // 该分支只会在上方启用“添加到工作区”选项后执行。
   const start = vscode.workspace.workspaceFolders?.length ?? 0;
   const updated = vscode.workspace.updateWorkspaceFolders(start, 0, { uri });
   if (!updated) {
@@ -350,10 +339,10 @@ async function openFolderWorkspace(uri: vscode.Uri, folderStore: FolderStore): P
 }
 
 /**
- * 打开登记的根文件夹：由条目右侧的 inline 图标触发（view/item/context 的 inline group）。
- * 目标取 inline 回传的元素。
+ * 打开登记的根目录。命令由条目右侧的行内按钮触发。
  *
- * @param item - inline 按钮所在行的树条目
+ * @param item - 行内按钮所在的树条目
+ * @returns 表示用户已取消或打开操作已完成的 Promise
  */
 export const OPEN_FOLDER_COMMAND = defineCommand(
   'folderShelf.openFolder',
@@ -369,8 +358,7 @@ export const OPEN_FOLDER_COMMAND = defineCommand(
 );
 
 /**
- * 不可访问条目的行内提示图标绑定命令。
- * 树视图的行内图标（view/item/context 的 inline 分组）必须挂在一个命令上才能渲染，
- * 本命令为空实现：图标仅作视觉提示（说明文案见条目 tooltip），点击无任何动作。
+ * 为不可访问条目的提示图标提供空命令。VS Code 只有在行内图标绑定命令时才会显示它；
+ * 具体原因由树项的悬停提示说明。
  */
 export const UNAVAILABLE_HINT_COMMAND = defineCommand('folderShelf.unavailableHint', () => {});

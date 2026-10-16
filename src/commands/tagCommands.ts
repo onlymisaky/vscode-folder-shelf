@@ -6,26 +6,24 @@ import { inject } from '../services/container';
 import { collectManagedUris } from './folderCommands';
 import { TAG_ICON, isTagEntry } from '../treeViews/foldersProvider/entries';
 import type { Entry } from '../treeViews/foldersProvider/entries';
-import { confirmDanger, renameViaInputBox, showPicker } from '../utils';
+import { confirmDanger, editViaInputBox, showPicker } from '../utils';
 
 /**
- * 标签选择器的行对象：在 QuickPickItem 基础上挂真实标签名，
- * 结果按行对象回传后经 tagName 取回标签名。
+ * 标签选择项。`tagName` 保存最终写入配置的标签名。
  */
 type TagPickItem = vscode.QuickPickItem & {
-  /** 行对应的真实标签名 */
+  /** 选择项对应的标签名。 */
   readonly tagName: string;
 };
 
 /**
- * 标签命令共享流程：解析目标（支持多选）→ 以各条目标签的并集预勾选 → 多选 QuickPick
- * （添加标签与管理标签界面完全相同，仅标题不同；showPicker 支持键入即建、创建后继续选）
- * → 确认后以 replace 语义写入全部目标。
- * 全不勾选确认即清除所选条目的全部标签；集合无实际变化时 store 层不写盘、不触发刷新。
+ * 打开标签多选器，并用确认后的完整标签集合替换所有目标条目的标签。初始勾选项是
+ * 目标条目标签的并集；确认空集合会清除全部标签。
  *
  * @param item - 触发菜单的树条目
- * @param selectedItems - 多选时的 selection 数组
- * @param buildTitle - 标题构造器：入参为待操作条目名（逗号连接），返回已翻译标题文案
+ * @param selectedItems - 多选时的完整选择
+ * @param buildTitle - 根据逗号分隔的条目名称生成标题
+ * @returns 表示用户已取消或标签已更新的 Promise
  */
 async function pickAndSetTags(
   item: Entry | undefined,
@@ -44,17 +42,17 @@ async function pickAndSetTags(
     folderStore.getAllWithMeta(),
   ]);
   const tagsByPath = new Map(allMeta.map((meta) => [meta.uri.toString(), meta.tags]));
-  // 预勾选 = 所有选中条目标签的并集（单选即该条目自身标签），避免「未编辑直接确认」误清空
+  // 预选所有目标已有标签，避免用户未改动就确认时意外清空标签。
   const currentTags = [...new Set(targets.flatMap((uri) => tagsByPath.get(uri.toString()) ?? []))];
 
-  // 行全集：行对象挂 tagName，结果按行对象回传后取回标签名；预勾选直接传名字集合（label 即名字域）
+  // 选择结果通过 `tagName` 还原为配置中的标签字符串。
   const items: TagPickItem[] = existingTags.map((name) => ({
     tagName: name,
     label: name,
     iconPath: new vscode.ThemeIcon(TAG_ICON),
   }));
 
-  // 标题显示待操作条目名单，让操作对象一目了然
+  // 在标题中列出操作对象，避免多选时目标不明确。
   const names = targets.map((uri) => path.basename(uri.fsPath));
   const picked = await showPicker(items, {
     title: buildTitle(names.join(', ')),
@@ -73,10 +71,11 @@ async function pickAndSetTags(
 }
 
 /**
- * 添加标签：未加标签条目的右键菜单项（与「管理标签」共用同一多选 QuickPick，仅标题不同）。
+ * 打开“添加标签”选择器并替换所选条目的标签集合。
  *
  * @param item - 触发菜单的树条目
- * @param selectedItems - 多选时的 selection 数组
+ * @param selectedItems - 多选时的完整选择
+ * @returns 表示用户已取消或标签已更新的 Promise
  */
 export const ADD_TAG_COMMAND = defineCommand(
   'folderShelf.addTag',
@@ -86,10 +85,11 @@ export const ADD_TAG_COMMAND = defineCommand(
 );
 
 /**
- * 管理标签：已加标签条目的右键菜单项（与「添加标签」共用同一多选 QuickPick，仅标题不同）。
+ * 打开“管理标签”选择器并替换所选条目的标签集合。
  *
  * @param item - 触发菜单的树条目
- * @param selectedItems - 多选时的 selection 数组
+ * @param selectedItems - 多选时的完整选择
+ * @returns 表示用户已取消或标签已更新的 Promise
  */
 export const MANAGE_TAGS_COMMAND = defineCommand(
   'folderShelf.manageTags',
@@ -99,9 +99,10 @@ export const MANAGE_TAGS_COMMAND = defineCommand(
 );
 
 /**
- * 重命名标签：批量改写所有持有该标签条目的 tags 字段。目标取右键回传的标签节点。
+ * 重命名菜单对应的标签，并更新所有使用该标签的条目。
  *
- * @param item - 触发菜单的树条目（须为标签节点，否则忽略）
+ * @param item - 触发菜单的条目；不是标签节点时忽略
+ * @returns 表示用户已取消或重命名已完成的 Promise
  */
 export const RENAME_TAG_COMMAND = defineCommand(
   'folderShelf.renameTag',
@@ -109,7 +110,7 @@ export const RENAME_TAG_COMMAND = defineCommand(
     if (!isTagEntry(item)) {
       return;
     }
-    await renameViaInputBox(
+    await editViaInputBox(
       item.name,
       {
         title: vscode.l10n.t('Rename Tag'),
@@ -121,9 +122,10 @@ export const RENAME_TAG_COMMAND = defineCommand(
 );
 
 /**
- * 删除标签：确认后从所有持有该标签的条目中移除（条目本身保留）。目标取右键回传的标签节点。
+ * 经用户确认后删除菜单对应的标签，保留所有条目。
  *
- * @param item - 触发菜单的树条目（须为标签节点，否则忽略）
+ * @param item - 触发菜单的条目；不是标签节点时忽略
+ * @returns 表示用户已取消或标签已删除的 Promise
  */
 export const DELETE_TAG_COMMAND = defineCommand(
   'folderShelf.deleteTag',

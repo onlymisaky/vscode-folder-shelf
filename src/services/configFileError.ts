@@ -1,30 +1,36 @@
 import * as vscode from 'vscode';
 
-/** 配置文件错误的类别 */
+/** 配置文件的语法或结构错误类别。 */
 export type ConfigFileErrorKind = 'json-syntax' | 'invalid-top-level' | 'invalid-items';
 
-/** 结构错误的类别（不含语法错误） */
+/** 配置文件结构错误类别，不含 JSON 语法错误。 */
 export type ConfigSchemaErrorKind = Exclude<ConfigFileErrorKind, 'json-syntax'>;
 
 /**
- * config.json 读取失败（JSON 语法错误或结构不符 schema）：携带错误类别、文件路径、
- * 语法错误的行列位置与根源描述（zod / JSON.parse 英文原文）。
- * FolderStore 会把该错误缓存到 refresh/setFile 为止（同一读取代内抛同一错误对象），
- * 期间所有写操作拒绝执行（fail-closed，避免用新内容覆盖损坏文件）；
- * UI 层捕获后经 reportConfigFileError 弹窗展示定位信息并引导修复。
+ * 表示 `config.json` 的 JSON 语法错误或结构错误。错误包含文件位置和原始诊断信息；
+ * {@link FolderStore} 会缓存该实例并暂停写入，直到用户刷新或切换配置文件。
  */
 export class ConfigFileError extends Error {
-  /** 错误类别 */
+  /** 错误类别。 */
   readonly kind: ConfigFileErrorKind;
-  /** 配置文件路径（弹窗展示用） */
+  /** 用于错误提示的配置文件路径。 */
   readonly filePath: string;
-  /** 根源描述（英文原文） */
+  /** 底层解析器返回的原始错误信息。 */
   readonly detail: string;
-  /** JSON 语法错误的 1-based 行号；结构错误为 undefined */
+  /** JSON 语法错误的行号，从 1 开始；结构错误时为 `undefined`。 */
   readonly line: number | undefined;
-  /** JSON 语法错误的 1-based 列号；结构错误为 undefined */
+  /** JSON 语法错误的列号，从 1 开始；结构错误时为 `undefined`。 */
   readonly column: number | undefined;
 
+  /**
+   * 创建配置文件错误。
+   *
+   * @param kind - 错误类别
+   * @param fileUri - 出错的配置文件 URI
+   * @param detail - 原始错误信息
+   * @param line - 从 1 开始的行号，仅语法错误可能提供
+   * @param column - 从 1 开始的列号，仅语法错误可能提供
+   */
   private constructor(
     kind: ConfigFileErrorKind,
     fileUri: vscode.Uri,
@@ -42,12 +48,12 @@ export class ConfigFileError extends Error {
   }
 
   /**
-   * JSON 语法错误工厂：从 JSON.parse 的报错信息提取字符偏移并换算行列。
-   * V8 报错形如 "… at position 96"（较新版本还会附带 "(line 4 column 5)"，此处自行换算以保证可用）。
+   * 根据 `JSON.parse` 错误创建语法错误，并在错误包含字符偏移时计算行列。
    *
-   * @param text - 已解码（且已剥离 BOM）的文件全文
-   * @param cause - JSON.parse 抛出的原始错误
-   * @param fileUri - 配置文件 Uri
+   * @param text - 已解码且已移除 BOM 的文件内容
+   * @param cause - `JSON.parse` 抛出的错误
+   * @param fileUri - 配置文件 URI
+   * @returns 包含可用行列信息的语法错误
    */
   static parseFailed(text: string, cause: unknown, fileUri: vscode.Uri): ConfigFileError {
     const detail = cause instanceof Error ? cause.message : String(cause);
@@ -66,11 +72,12 @@ export class ConfigFileError extends Error {
   }
 
   /**
-   * 结构错误工厂（顶层非对象 / items 非数组）：行列未知，根源为 zod issue 文本。
+   * 根据 Zod 校验结果创建配置结构错误。
    *
    * @param kind - 结构错误类别
-   * @param detail - zod issues 拼接的根源文本
-   * @param fileUri - 配置文件 Uri
+   * @param detail - 已格式化的 Zod 问题文本
+   * @param fileUri - 配置文件 URI
+   * @returns 不含行列信息的结构错误
    */
   static schemaFailed(
     kind: ConfigSchemaErrorKind,

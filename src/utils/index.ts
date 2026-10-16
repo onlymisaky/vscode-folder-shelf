@@ -1,59 +1,57 @@
 import * as vscode from 'vscode';
 
-/** 通用重命名输入框的本地化文案配置。 */
-export interface RenameInputOptions {
-  /** 输入框标题；必须由调用方提前完成本地化 */
+/** 通用编辑输入框的文案配置。 */
+export interface EditInputOptions {
+  /** 输入框标题 */
   readonly title: string;
-  /** 输入为空白时的校验提示；必须由调用方提前完成本地化 */
+  /** 输入为空白时的校验提示 */
   readonly emptyMessage: string;
 }
 
 /**
- * 生成输入框校验器：名称不能为空白（validateInput 直接可用）。
- * 不保留任何保留名——「未加标签」「未分组」等虚拟节点由 Entry kind 标识，
- * 真实名称允许与它们同名（树上以 tooltip 区分）。
+ * 创建校验值不能为空白的输入校验函数，去除首尾空白后为空即视为无效。
  *
- * @param emptyMessage - 校验失败时的提示文案（须为调用方已翻译文案）
- * @returns 输入校验函数：入参为当前输入值，空白（含纯空格）时返回提示文案，否则返回 undefined 表示通过
+ * @param emptyMessage - 值为空白时显示的提示
+ * @returns 可直接传给 `validateInput` 的校验函数
  */
-export function createNameValidator(
+export function createRequiredValidator(
   emptyMessage: string
 ): (value: string) => string | undefined {
   return (value: string) => (value.trim() === '' ? emptyMessage : undefined);
 }
 
 /**
- * 重命名通用流程：预填当前名的输入框（校验非空白）→ 首尾去空 →
- * 空白或未变化即取消，确有新名才执行 apply（收到去空后的新名称）。
+ * 显示预填当前值的输入框，并在值有效且发生变化时应用修改
  *
- * @param currentName - 当前名称（预填入输入框）
- * @param options - 文案配置：title 为输入框标题，emptyMessage 为空白校验提示（均须为已翻译文案）
- * @param apply - 应用新名称的回调：入参为去空后的新名称，仅在与现名不同且非空白时调用
+ * @param currentValue - 输入框中预填的当前值
+ * @param options - 标题和校验提示
+ * @param apply - 接收去除首尾空白后新值的异步回调
+ * @returns 表示用户已取消或修改已完成的 Promise
  */
-export async function renameViaInputBox(
-  currentName: string,
-  options: RenameInputOptions,
-  apply: (newName: string) => Promise<unknown>
+export async function editViaInputBox(
+  currentValue: string,
+  options: EditInputOptions,
+  apply: (newValue: string) => Promise<unknown>
 ): Promise<void> {
-  const name = await vscode.window.showInputBox({
+  const value = await vscode.window.showInputBox({
     title: options.title,
-    value: currentName,
-    validateInput: createNameValidator(options.emptyMessage),
+    value: currentValue,
+    validateInput: createRequiredValidator(options.emptyMessage),
   });
-  // 输入统一首尾去空后再比较与保存
-  const trimmed = name?.trim() ?? '';
-  if (trimmed === '' || trimmed === currentName) {
+  // 比较和保存前统一去除首尾空白
+  const trimmed = value?.trim() ?? '';
+  if (trimmed === '' || trimmed === currentValue) {
     return;
   }
   await apply(trimmed);
 }
 
 /**
- * 危险操作确认：模态警告框 + 单个确认按钮。
+ * 显示带单个确认按钮的模态警告框
  *
- * @param message - 警告内容（须为已翻译文案）
- * @param confirmLabel - 确认按钮文字（须为已翻译文案）
- * @returns 用户是否点了确认按钮（Esc / 关闭 / 取消均视为否）
+ * @param message - 警告内容
+ * @param confirmLabel - 确认按钮文本
+ * @returns 用户点击确认按钮时为 `true`；关闭弹窗时为 `false`
  */
 export async function confirmDanger(
   message: string,

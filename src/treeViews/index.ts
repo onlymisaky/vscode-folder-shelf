@@ -7,24 +7,23 @@ import { inject } from '../services/container';
 import { FolderStore } from '../services/folderStore';
 import { ViewModeStore } from '../services/viewModeStore';
 
-/** 自定义 context key：selection 是否同时含已分组与未分组条目（供菜单 when 感知 selection 组成成分），值恒为 boolean */
+/** 当前选择是否同时包含已分组和未分组条目的上下文键。 */
 const SELECTION_MIXED_KEY = 'folderShelf.selectionMixed';
 
-/** registerTreeViews 的返回值：视图相关的可释放对象与对外引用 */
+/** 树视图注册结果。 */
 export interface RegisteredViews {
-  /** 全部需挂到 context.subscriptions 的可释放对象（视图、Provider、事件订阅、装饰器） */
+  /** 应加入 `context.subscriptions` 的视图、数据源、监听器和装饰器。 */
   readonly disposables: vscode.Disposable[];
-  /** 树数据 Provider 实例（供组合根或后续扩展引用） */
+  /** 树数据源。 */
   readonly foldersProvider: FoldersProvider;
-  /** 创建后的树视图句柄，供调用方读取选择状态或注册后续交互 */
+  /** 已创建的树视图。 */
   readonly foldersView: vscode.TreeView<Entry>;
 }
 
 /**
- * 树视图组合根：创建收藏树 Provider、TreeView 与拖拽控制器，
- * 并订阅数据变更、展示模式切换、selection 变更三类事件维护视图状态。
+ * 创建树、数据源和拖放控制器，并注册数据、视图模式和选择变化监听器。
  *
- * @returns 视图句柄集合（含需统一释放的 disposables）
+ * @returns 树视图引用及其可释放资源
  */
 export function registerTreeViews(): RegisteredViews {
   const folderStore = inject(FolderStore);
@@ -38,22 +37,21 @@ export function registerTreeViews(): RegisteredViews {
     dragAndDropController: new FoldersDragAndDropController(folderStore),
   });
 
-  // 数据变更（如新增文件夹）时刷新视图
+  // 树数据和视图模式变化都需要重建树节点。
   const refreshSubscription = folderStore.onDidChange(() => {
     foldersProvider.refresh();
   });
 
-  // 展示模式切换（平铺/分组）时刷新根层级
+  // 视图模式变化需要重建树节点。
   const modeSubscription = viewModeStore.onDidChange(() => {
     foldersProvider.refresh();
   });
 
   /**
-   * 将当前选择是否混合包含已分组和未分组条目写入自定义上下文键。
-   * viewItem 只反映单条目，内置键无法区分「多选全已分组」与「混选」；右键前的选择事件
-   * 先于菜单条件求值，因此在此同步后，菜单的 when 子句始终能读取到最新组成状态。
+   * 更新选择组成上下文键。内置 `viewItem` 只描述触发菜单的单个条目，无法判断
+   * 多选中是否同时包含已分组和未分组条目。
    *
-   * @param selection - 当前树选择；非登记节点会被忽略
+   * @param selection - 当前树选择；非受管理节点会被忽略
    */
   const updateSelectionMixed = (selection: readonly Entry[]): void => {
     const managed = selection.filter(isManagedEntry);
@@ -67,7 +65,7 @@ export function registerTreeViews(): RegisteredViews {
     updateSelectionMixed(event.selection);
   });
 
-  // 「未分组」「未加标签」虚拟节点弱化着色（与同名真实分组/标签区分）
+  // 虚拟节点弱化着色，便于与同名的真实分组或标签区分。
   const decorationProvider = vscode.window.registerFileDecorationProvider(new VirtualGroupDecorationProvider());
 
   return {

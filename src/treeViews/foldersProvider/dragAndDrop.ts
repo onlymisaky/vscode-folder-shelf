@@ -3,67 +3,61 @@ import { ConfigFileError } from '../../services/configFileError';
 import { FolderStore } from '../../services/folderStore';
 import type { ItemTagUpdate } from '../../services/folderStore';
 import { reportConfigFileError } from '../../utils';
+import { SETTING_DRAG_TO_TAG, SETTING_SECTION } from '../../settings';
 import { isManagedEntry } from './entries';
 import type { Entry, NodeEntry, TagEntry } from './entries';
 
-/** 树内拖拽使用的 MIME 类型（约定为树 id 的小写形式），value 为登记条目数组 */
+/** 树内部拖放数据使用的 MIME 类型。 */
 const TREE_MIME_TYPE = 'application/vnd.code.tree.foldershelf.views.folders';
 
-/** 设置段前缀 */
-const SETTING_SECTION = 'folderShelf';
-/** 设置键：拖到标签节点时对已加标签条目的处理方式 */
-const SETTING_DRAG_TO_TAG = 'dragToTagAction';
-
-/** 拖到标签节点时的处理方式：始终询问 / 从当前标签移出 / 保留现有标签 */
+/** 已带标签的条目拖到另一标签时所用的行为设置。 */
 type DragToTagAction = 'alwaysAsk' | 'removeCurrent' | 'keepCurrent';
 
 /** 已至少包含一个标签的登记节点。 */
 type TaggedNodeEntry = NodeEntry & {
-  /** 非空标签数组；类型守卫会在拖放处理前验证其长度 */
+  /** 至少包含一个值的标签数组。 */
   readonly tags: string[];
 };
 
 /**
- * 收藏树的拖拽控制器：
- * - 拖拽登记条目（文件夹/文件）到分组节点 → 归入该分组
- * - 拖到视图空白区（target 为 undefined）→ 移出分组
- * - 拖到「未分组」节点 → 移出分组；拖到「未加标签」节点 → 清除全部标签
- * - 拖到标签节点 → 无标签条目直接新增该标签；已加标签条目按设置处理（默认弹窗询问）：
- *   「当前标签」指条目被拖出所在的标签组（由渲染时挂在 NodeEntry 上的 underTag 随拖拽传出）
- * - 拖到具体条目上不处理（不做磁盘移动/排序）
+ * 处理树内部拖放。分组节点用于设置分组，空白区域和“未分组”节点用于移出分组，
+ * 标签节点用于添加或迁移标签，“未加标签”节点用于清空标签。拖到文件系统节点不会
+ * 移动磁盘内容或改变排序。
  */
 export class FoldersDragAndDropController implements vscode.TreeDragAndDropController<Entry> {
-  /** 接受的拖入 MIME（仅本树内部拖拽） */
+  /** 本控制器接受的内部拖放 MIME 类型。 */
   readonly dropMimeTypes = [TREE_MIME_TYPE];
-  /** 拖出时携带的 MIME（value 为 managed 的 NodeEntry 数组） */
+  /** 拖出时写入的 MIME 类型，其值为受管理节点数组。 */
   readonly dragMimeTypes = [TREE_MIME_TYPE];
 
   /**
-   * @param folderStore - 处理拖放结果的收藏列表存储服务
+   * 创建树拖放控制器。
+   *
+   * @param folderStore - 保存拖放结果的列表存储服务
    */
   constructor(private readonly folderStore: FolderStore) { }
 
   /**
-   * 拖拽开始：把登记条目（含标签模式下的 underTag 上下文）写入 DataTransfer。
+   * 将拖拽的受管理节点写入 `DataTransfer`。
    *
-   * @param source - 被拖拽的条目数组（可能含非 managed 条目，会被过滤）
-   * @param dataTransfer - 拖拽数据载体（写入本树 MIME，value 为 NodeEntry 数组）
+   * @param source - 被拖拽的条目；非受管理节点会被过滤
+   * @param dataTransfer - 接收内部节点数组的拖放数据容器
    */
   handleDrag(source: readonly Entry[], dataTransfer: vscode.DataTransfer): void {
-    // 仅登记的根层级条目（managed）可拖拽分组；标签模式下子层级渲染的 NodeEntry 带 underTag 一并传出
+    // 标签模式下保留 `parentTag`，供放下时识别条目原来所在的标签节点。
     const entries = source.filter(isManagedEntry);
     if (entries.length > 0) {
-      // 树内拖拽的 DataTransferItem.value 可直接回读对象（跨树/外部拖拽无该 MIME）
+      // 同一棵树内可直接从 DataTransferItem.value 取回节点对象。
       dataTransfer.set(TREE_MIME_TYPE, new vscode.DataTransferItem(entries));
     }
   }
 
   /**
-   * 拖放落点分派：分组 → 归组；标签 → dropOnTag；「未加标签」→ 清除标签；
-   * 空白区/「未分组」→ 移出分组；拖到具体条目上不处理。
+   * 根据放置目标更新分组或标签。放到文件系统节点时不执行任何操作。
    *
-   * @param target - 拖放落点条目；undefined 表示视图空白区
-   * @param dataTransfer - 拖拽数据载体（读取本树 MIME 还原拖拽条目）
+   * @param target - 放置目标；`undefined` 表示视图空白区域
+   * @param dataTransfer - 包含内部节点数组的拖放数据容器
+   * @returns 表示存储已更新或错误提示已完成的 Promise
    */
   async handleDrop(
     target: Entry | undefined,
@@ -83,14 +77,14 @@ export class FoldersDragAndDropController implements vscode.TreeDragAndDropContr
       } else if (target?.kind === 'tag') {
         await this.dropOnTag(target, entries);
       } else if (target?.kind === 'untagged') {
-        // 拖到「未加标签」节点：清除全部标签（与「未分组」节点的移出分组对等）
+        // “未加标签”节点表示清空所有标签。
         await this.folderStore.setItemTags(uris, undefined);
       } else if (target === undefined || target.kind === 'ungrouped') {
-        // 拖到空白区或「未分组」节点：移出分组
+        // 空白区域和“未分组”节点都表示移出分组。
         await this.folderStore.setItemGroups(uris, undefined);
       }
     } catch (error) {
-      // 配置文件损坏期间拒绝写操作（fail-closed）：弹窗上报后放弃本次拖放
+      // 配置无效时保留原文件，并向用户显示修复入口。
       if (error instanceof ConfigFileError) {
         await reportConfigFileError(error);
         return;
@@ -100,13 +94,12 @@ export class FoldersDragAndDropController implements vscode.TreeDragAndDropContr
   }
 
   /**
-   * 拖到标签节点：无标签条目直接新增该标签（规则1）；已加标签条目（规则2）按设置
-   * dragToTagAction 决定动作——「从当前标签移出」保留其余标签、移出被拖出的标签组；
-   * 「保留现有标签」原样追加；「始终询问」弹模态确认，取消则仅放弃已加标签条目的处理。
-   * 混合拖拽一次询问，动作按各自 underTag 独立执行；整批经 applyItemTags 单次写盘。
+   * 将条目拖到标签节点。无标签条目直接添加目标标签；已有标签的条目根据设置保留
+   * 原标签、移除拖出位置对应的标签，或弹窗询问。所有变化一次写入存储。
    *
-   * @param target - 拖放落点的标签节点
-   * @param entries - 被拖拽的登记条目（可含无标签与已加标签混合）
+   * @param target - 目标标签节点
+   * @param entries - 被拖拽的受管理节点
+   * @returns 表示标签更新完成的 Promise
    */
   private async dropOnTag(target: TagEntry, entries: readonly NodeEntry[]): Promise<void> {
     const tagged = entries.filter(
@@ -114,14 +107,14 @@ export class FoldersDragAndDropController implements vscode.TreeDragAndDropContr
     );
     const updates: ItemTagUpdate[] = [];
 
-    // 规则1：无标签条目直接新增（无需确认）
+    // 无标签条目可以直接添加目标标签。
     for (const entry of entries) {
       if (!entry.tags?.length) {
         updates.push({ uri: entry.uri, tags: [target.name] });
       }
     }
 
-    // 规则2：已加标签条目按设置决定动作
+    // 已带标签的条目按用户设置处理。
     let action: 'remove' | 'keep' | undefined;
     const setting = vscode.workspace
       .getConfiguration(SETTING_SECTION)
@@ -131,8 +124,7 @@ export class FoldersDragAndDropController implements vscode.TreeDragAndDropContr
     } else if (setting === 'keepCurrent') {
       action = 'keep';
     } else if (tagged.length > 0) {
-      // 始终询问：仅存在已加标签条目时才有得问；取消 = 放弃对这批条目的处理。
-      // 按钮直接写出动作结果（移出/保留 + 是否加入新标签），避免「当前标签」类术语造成歧义
+      // 只为已有标签的条目询问一次；关闭弹窗表示不更新这些条目。
       const REMOVE: vscode.MessageItem = {
         title: vscode.l10n.t('Remove original tag, then add "{0}"', target.name),
       };
@@ -157,16 +149,16 @@ export class FoldersDragAndDropController implements vscode.TreeDragAndDropContr
     }
 
     for (const entry of tagged) {
-      // 移出条件双保险：动作为移出且条目确有拖出标签组（underTag 缺失时按保留兜底）
-      if (action === 'remove' && entry.underTag) {
-        // 移出所在标签组：保留其余标签 ∪ 新标签（新标签已在其中则仅移出）
-        const kept = entry.tags.filter((tag) => tag !== entry.underTag);
+      // 只有标签模式提供 `parentTag`；缺少该信息时保留原标签。
+      if (action === 'remove' && entry.parentTag) {
+        // 移除拖出位置对应的标签，再添加目标标签并去重。
+        const kept = entry.tags.filter((tag) => tag !== entry.parentTag);
         updates.push({
           uri: entry.uri,
           tags: kept.includes(target.name) ? kept : [...kept, target.name],
         });
       } else if (action === 'keep' || action === 'remove') {
-        // 保留现有标签：现有集合 ∪ 新标签（去重）
+        // 保留现有标签，并在尚未包含目标标签时添加它。
         updates.push({
           uri: entry.uri,
           tags: entry.tags.includes(target.name) ? entry.tags : [...entry.tags, target.name],

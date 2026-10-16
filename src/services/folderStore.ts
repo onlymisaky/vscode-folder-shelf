@@ -4,44 +4,43 @@ import { itemSchema, rawFileSchema, formatIssues, topLevelErrorKind } from './co
 import type { UsableItem } from './configSchema';
 import { itemUriOf, itemPathOf } from '../utils';
 
-/** 携带分组与标签信息的条目视图（getAllWithMeta 返回） */
+/** {@link FolderStore.getAllWithMeta} 返回的条目元数据。 */
 export interface ItemMeta {
-  /** 条目绝对路径对应的资源 Uri */
+  /** 条目对应的资源 URI。 */
   readonly uri: vscode.Uri;
-  /** 所属分组名；undefined 表示未分组 */
+  /** 所属分组名；`undefined` 表示未分组。 */
   readonly group?: string;
-  /** 标签列表；undefined 表示无标签 */
+  /** 标签列表；`undefined` 表示无标签。 */
   readonly tags?: string[];
 }
 
 /** 新增条目的统计结果。 */
 export interface AddItemsResult {
-  /** 实际写入存储的新条目数量，取值不小于 0 */
+  /** 实际写入存储的新条目数，不小于 0。 */
   readonly added: number;
-  /** 因路径重复而跳过的条目数量，取值不小于 0 */
+  /** 因 URI 重复而跳过的条目数，不小于 0。 */
   readonly skipped: number;
 }
 
 /** 单个条目的标签替换请求。 */
 export interface ItemTagUpdate {
-  /** 用于定位待更新条目的绝对资源 Uri */
+  /** 待更新条目的资源 URI。 */
   readonly uri: vscode.Uri;
-  /** 替换后的完整标签集合；允许空数组表示清除全部标签 */
+  /** 替换后的完整标签集合；空数组表示清除全部标签。 */
   readonly tags: readonly string[];
 }
 
-/** 无法渲染的无效条目（原始对象）及其校验失败原因（树占位节点展示用） */
+/** 无法渲染的原始条目及其校验错误。 */
 export interface InvalidItemNote {
-  /** 未通过 itemSchema 的原始条目（文件中保持原样） */
+  /** 未通过 {@link itemSchema} 校验的原始条目。 */
   readonly item: unknown;
-  /** zod issue 文案，如 `items[3].path: Invalid input: expected string, received number` */
+  /** 供树视图显示的 Zod 问题文本。 */
   readonly issue: string;
 }
 
 /**
- * config.json 的内存快照：top 为顶层原始对象（未知字段保留，写回时整体 spread）；
- * items 为逐条 itemSchema 校验后的数组——通过校验的是 looseObject 解析产物（未知字段随对象保留），
- * 未通过的是原始对象（文件内容保持原样、不参与渲染与操作）。
+ * `config.json` 的内存快照。`top` 保留顶层未知字段；`items` 同时保存已解析条目和
+ * 校验失败的原始值，以便写回时保持用户数据不变。
  */
 interface RawConfigFile {
   readonly top: Record<string, unknown>;
@@ -50,11 +49,11 @@ interface RawConfigFile {
 }
 
 /**
- * 标签集合 normalize：逐个 trim、去空、去重；结果为空视为无标签（undefined）。
- * 仅用于写路径（用户显式设置标签），读路径不做任何清洗。
+ * 清理待写入的标签：去除首尾空白、空值和重复项。读取配置时不调用本函数，
+ * 避免在用户未编辑标签时改写原始数据。
  *
- * @param tags - 原始标签集合，允许含非字符串脏元素；undefined 视为无标签
- * @returns 清洗后的标签数组（非空、去重、保持首现顺序）；无有效标签时为 undefined
+ * @param tags - 原始标签集合；可含非字符串值
+ * @returns 保持首次出现顺序的非空标签数组；无有效标签时为 `undefined`
  */
 function normalizeTags(tags: readonly unknown[] | undefined): string[] | undefined {
   const cleaned = [
@@ -69,11 +68,11 @@ function normalizeTags(tags: readonly unknown[] | undefined): string[] | undefin
 }
 
 /**
- * 标签集合逐项比较（顺序敏感，保持用户勾选顺序）。
+ * 按顺序比较两个标签集合。
  *
- * @param a - 左侧标签集合；undefined 视为无标签
- * @param b - 右侧标签集合；undefined 视为无标签
- * @returns 两集合均为 undefined，或长度相同且逐项相等时为 true
+ * @param a - 第一个标签集合
+ * @param b - 第二个标签集合
+ * @returns 两者均为 `undefined`，或长度和每一项都相同时为 `true`
  */
 function sameTags(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
   if (a === undefined || b === undefined) {
@@ -83,11 +82,10 @@ function sameTags(a: readonly string[] | undefined, b: readonly string[] | undef
 }
 
 /**
- * 渲染守卫：条目 path（与 itemSchema 判据一致——对象且为非空字符串才可用）。
- * read 已完成权威校验，此守卫供操作层快速判别可用条目。
+ * 从原始条目读取可用的 `path` 字段。
  *
- * @param raw - 原始条目（或解析产物）
- * @returns 可用的 path；条目无效时为 undefined
+ * @param raw - 原始条目或已解析条目
+ * @returns 非空路径；条目无效时为 `undefined`
  */
 function usablePath(raw: unknown): string | undefined {
   if (typeof raw !== 'object' || raw === null) {
@@ -98,20 +96,21 @@ function usablePath(raw: unknown): string | undefined {
 }
 
 /**
- * 条目路径与菜单回传 Uri 之间的同一性桥接：所有侧（存储匹配、命令去重、命令定位）
- * 统一以「path → Uri → 规范化字符串」为匹配键——file 条目经 Uri.file 推导（相对路径
- * 会补前导斜杠，推导前后一致），虚拟协议条目经 Uri.parse 后 toString 归一
- * （authority 的 %2B 等编码形态与未编码书写归一到相同键）。
+ * 将配置中的路径转换为稳定的 URI 字符串，用于匹配和去重。本地路径和完整 URI
+ * 都先经过 {@link itemUriOf} 规范化。
  *
- * @param p - usablePath 产出的原始条目路径
- * @returns 与树侧 uri.toString() 一致的匹配键
+ * @param p - 配置条目的路径
+ * @returns 与树节点 `uri.toString()` 格式一致的匹配键
  */
 function keyOf(p: string): string {
   return itemUriOf(p).toString();
 }
 
 /**
- * 渲染守卫：条目 group（仅字符串有效，其余类型显示为未分组，不改写文件）。
+ * 从原始条目读取分组名；非字符串值按未分组处理。
+ *
+ * @param raw - 原始条目或已解析条目
+ * @returns 分组名；字段无效时为 `undefined`
  */
 function groupOf(raw: unknown): string | undefined {
   if (typeof raw !== 'object' || raw === null) {
@@ -122,7 +121,10 @@ function groupOf(raw: unknown): string | undefined {
 }
 
 /**
- * 渲染守卫：条目 tags 原始数组（仅数组有效，其余类型显示为无标签，不改写文件）。
+ * 从原始条目读取未经清理的标签数组。
+ *
+ * @param raw - 原始条目或已解析条目
+ * @returns 原始标签数组；字段不是数组时为 `undefined`
  */
 function rawTagsOf(raw: unknown): readonly unknown[] | undefined {
   if (typeof raw !== 'object' || raw === null) {
@@ -133,8 +135,10 @@ function rawTagsOf(raw: unknown): readonly unknown[] | undefined {
 }
 
 /**
- * 渲染投影：过滤非字符串元素后的标签集合；空集合视为无标签（undefined）。
- * 仅影响显示，不改写文件。
+ * 生成用于显示的标签列表，不修改配置文件中的原始值。
+ *
+ * @param tags - 原始标签数组
+ * @returns 仅含字符串的标签数组；结果为空时为 `undefined`
  */
 function displayTags(tags: readonly unknown[] | undefined): string[] | undefined {
   const cleaned = (tags ?? []).filter((tag): tag is string => typeof tag === 'string');
@@ -142,8 +146,12 @@ function displayTags(tags: readonly unknown[] | undefined): string[] | undefined
 }
 
 /**
- * 条目既有标签（字符串投影）是否与新集合相同：仅当既有值为纯字符串数组时才可能相同，
- * 含脏元素视为不同（该条目被显式写标签时整体规范化替换）。
+ * 判断条目的原始标签是否与待写入标签完全相同。原始数组含非字符串值时返回
+ * `false`，使显式标签更新同时清理这些无效值。
+ *
+ * @param item - 已通过基础校验的配置条目
+ * @param next - 规范化后的新标签集合
+ * @returns 原始标签已是目标值时为 `true`
  */
 function sameItemTags(item: UsableItem, next: readonly string[] | undefined): boolean {
   const raw = rawTagsOf(item);
@@ -157,31 +165,29 @@ function sameItemTags(item: UsableItem, next: readonly string[] | undefined): bo
 }
 
 /**
- * 以独立的 JSON 文件持久化用户添加的文件夹/文件列表。
- * 读路径统一经 getRawItems（内存缓存优先，未加载才读盘；读取失败缓存 ConfigFileError，
- * 直到 refresh/setFile，期间所有写操作拒绝执行以保护损坏文件）；
- * 写路径统一经 commit（写盘 → 更新缓存 → 广播 onDidChange），只改写命中字段，
- * 顶层与条目的未知字段、无效条目一律原样保留（不自动清洗用户配置）。
+ * 在独立 JSON 文件中保存用户登记的文件和目录。读取结果会缓存；配置文件损坏时，
+ * 同一个 {@link ConfigFileError} 会持续抛出，直到刷新或切换文件，从而阻止写操作覆盖
+ * 损坏内容。写入时保留顶层未知字段、条目未知字段和无效条目。
  */
 export class FolderStore implements vscode.Disposable {
-  /** 数据变更事件发射器（commit 成功后触发） */
+  /** 成功提交数据后触发的事件发射器。 */
   private readonly _onDidChange = new vscode.EventEmitter<void>();
-  /** 数据变更事件（树视图订阅后整体刷新） */
+  /** 供树视图订阅的数据变更事件。 */
   readonly onDidChange = this._onDidChange.event;
 
-  /** 当前持久化文件的 Uri（folderShelf.configFile 设置变更时经 setFile 更新） */
+  /** 当前配置文件的 URI。 */
   private fileUri: vscode.Uri;
-  /** 持久化文件所在目录（写盘前确保存在） */
+  /** 当前配置文件所在的目录。 */
   private storageDir: vscode.Uri;
-  /** 配置文件内存快照；undefined 表示尚未从 JSON 文件加载 */
+  /** 配置文件快照；`undefined` 表示尚未加载。 */
   private cache: RawConfigFile | undefined;
-  /** 最近一次读取失败；缓存到 refresh/setFile 为止，保证同一读取代内抛同一错误对象（弹窗按对象去重） */
+  /** 最近一次读取错误；刷新或切换配置文件时清除。 */
   private readError: ConfigFileError | undefined;
 
   /**
-   * 创建使用指定配置文件的收藏存储。
+   * 创建使用指定配置文件的树存储。
    *
-   * @param fileUri - config.json 的绝对资源 Uri
+   * @param fileUri - 配置文件的绝对 URI
    */
   constructor(fileUri: vscode.Uri) {
     this.fileUri = fileUri;
@@ -189,9 +195,9 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 切换持久化文件位置（设置变更时调用）：重置缓存并触发刷新，下次 getAll 从新文件加载。
+   * 切换配置文件，清除缓存并通知订阅者重新加载。
    *
-   * @param fileUri - 新的 config.json 完整路径；与当前路径相同则忽略
+   * @param fileUri - 新配置文件的绝对 URI；路径未变化时忽略
    */
   setFile(fileUri: vscode.Uri): void {
     if (fileUri.fsPath === this.fileUri.fsPath) {
@@ -205,7 +211,7 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 丢弃缓存并触发刷新，下次 getAll 重新从 JSON 文件加载（文件可能在外部被修改）。
+   * 丢弃缓存并通知订阅者刷新，使下次读取重新访问配置文件。
    */
   refresh(): void {
     this.cache = undefined;
@@ -216,20 +222,22 @@ export class FolderStore implements vscode.Disposable {
   /**
    * 获取当前持久化文件的位置。
    *
-   * @returns 当前 config.json 的绝对资源 Uri；设置变更后会同步更新
+   * @returns 当前配置文件的绝对 URI
    */
   get file(): vscode.Uri {
     return this.fileUri;
   }
 
   /**
-   * 确保持久化文件存在：文件缺失时创建父目录，并写入当前缓存条目或空列表。
+   * 确保配置文件存在；缺失时创建父目录并写入当前缓存或空列表。
+   *
+   * @returns 表示文件已存在或已创建的 Promise
    */
   async ensureFile(): Promise<void> {
     try {
       await vscode.workspace.fs.stat(this.fileUri);
     } catch (error) {
-      // 仅文件不存在才需要创建，其余错误（权限等）原样抛出
+      // 仅在文件不存在时创建；权限等错误继续抛出。
       if (!(error instanceof vscode.FileSystemError && error.code === 'FileNotFound')) {
         throw error;
       }
@@ -238,9 +246,9 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 获取全部登记条目（文件夹/文件），首次调用时从 JSON 文件加载。
+   * 获取全部有效的登记条目，首次调用时从配置文件加载。
    *
-   * @returns 全部条目的资源 Uri 列表（按登记顺序；无效条目不含在内）
+   * @returns 按登记顺序排列的资源 URI；不含无效条目
    */
   async getAll(): Promise<vscode.Uri[]> {
     const items = await this.getRawItems();
@@ -251,9 +259,9 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 获取全部条目及其分组名、标签列表（树渲染用）。
+   * 获取树视图所需的有效条目及其分组和标签。
    *
-   * @returns 条目视图数组（按登记顺序；无效条目不含在内）
+   * @returns 按登记顺序排列的条目元数据；不含无效条目
    */
   async getAllWithMeta(): Promise<ItemMeta[]> {
     const items = await this.getRawItems();
@@ -271,10 +279,10 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 派生的分组名列表：按条目在列表中首次出现的顺序去重。
-   * 分组仅在仍有成员时存在，分组名不单独持久化；「未分组」虚拟节点由 Entry kind 标识。
+   * 从条目中提取分组名，并按首次出现顺序去重。分组名不单独持久化，
+   * 没有成员的分组不会出现在结果中。
    *
-   * @returns 分组名数组（可能为空）
+   * @returns 去重后的分组名数组
    */
   async getGroups(): Promise<string[]> {
     const groups: string[] = [];
@@ -288,9 +296,9 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 派生的标签列表：按条目在列表中首次出现的顺序去重。标签仅在仍被引用时存在，名称不单独持久化。
+   * 从条目中提取标签名，并按首次出现顺序去重。标签名不单独持久化。
    *
-   * @returns 标签名数组（可能为空）
+   * @returns 去重后的标签名数组
    */
   async getTags(): Promise<string[]> {
     const tags: string[] = [];
@@ -305,19 +313,19 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 获取无法渲染的无效条目及其校验失败原因（树占位节点展示用）。
+   * 获取当前快照中无法渲染的条目及其校验错误。
    *
-   * @returns 无效条目备注列表；读取成功后始终与文件内容对应，未加载或读取失败时为空
+   * @returns 无效条目列表；尚未成功加载时为空
    */
   getInvalidNotes(): ReadonlyArray<InvalidItemNote> {
     return this.cache?.invalidNotes ?? [];
   }
 
   /**
-   * 新增条目（文件夹/文件，按路径去重，一律未分组）。
+   * 添加文件或目录，并按规范化 URI 去重。新条目不设置分组和标签。
    *
-   * @param uris - 待添加的资源 Uri 列表；与已登记条目同一路径（uri 规范串相同）的会被跳过
-   * @returns added 为实际新增数，skipped 为因重复被跳过的数量；无新增时不写盘、不触发 onDidChange
+   * @param uris - 待添加的资源 URI；重复项会被跳过
+   * @returns 新增数和因重复而跳过的数量；无新增时不写入文件
    */
   async add(uris: readonly vscode.Uri[]): Promise<AddItemsResult> {
     const items = await this.getRawItems();
@@ -343,11 +351,10 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 从列表移除指定条目（不影响磁盘文件，其余条目的分组字段保留）。
-   * 仅命中可用条目；无效条目在文件中原样保留。
+   * 从列表移除指定条目，不删除磁盘资源。无效条目原样保留。
    *
-   * @param uris - 待移除的资源 Uri 列表；未登记的自动忽略
-   * @returns 实际移除的条目数；无命中时不写盘、不触发 onDidChange
+   * @param uris - 待移除的资源 URI；未登记的 URI 会被忽略
+   * @returns 实际移除的条目数；无匹配项时不写入文件
    */
   async remove(uris: readonly vscode.Uri[]): Promise<number> {
     const items = await this.getRawItems();
@@ -365,12 +372,12 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 批量字段替换的共享实现：仅命中可用条目并经 patch 生成新对象，patch 对无变化条目必须原样返回，
-   * 借对象同一性统计实际变化数；无效条目原样跳过；无任何变化时不写盘、不触发刷新。
+   * 批量更新指定条目。`patch` 必须为未变化的条目返回原对象，本方法据此统计
+   * 变化数量并避免无效写入；校验失败的条目不会交给回调。
    *
-   * @param uris - 目标条目的 Uri 列表
-   * @param patch - 单条目替换函数：入参为解析产物（含未知字段），返回新条目（无变化时须返回原对象）
-   * @returns 发生变化的条目数
+   * @param uris - 目标条目的资源 URI
+   * @param patch - 条目更新函数；无变化时必须返回原对象
+   * @returns 实际发生变化的条目数
    */
   private async patchItems(
     uris: readonly vscode.Uri[],
@@ -394,9 +401,9 @@ export class FolderStore implements vscode.Disposable {
   /**
    * 设置条目所属分组，同时保留路径、标签等其他元数据与未知字段。
    *
-   * @param uris - 目标条目的 Uri 列表
-   * @param group - 目标分组名；undefined 表示移出分组
-   * @returns 发生变化的条目数；无实际变化时不写盘、不触发 onDidChange
+   * @param uris - 目标条目的资源 URI
+   * @param group - 目标分组名；`undefined` 表示移出分组
+   * @returns 实际发生变化的条目数
    */
   async setItemGroups(uris: readonly vscode.Uri[], group: string | undefined): Promise<number> {
     return this.patchItems(uris, (item) => {
@@ -408,11 +415,11 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 以替换语义设置条目标签集合，同时保留路径、分组等其他元数据与未知字段。
+   * 替换条目的完整标签集合，同时保留路径、分组和未知字段。
    *
-   * @param uris - 目标条目的 Uri 列表
-   * @param tags - 新标签集合（名称统一 trim、去空、去重）；undefined 或空集表示清除全部标签
-   * @returns 发生变化的条目数；无实际变化时不写盘、不触发 onDidChange
+   * @param uris - 目标条目的资源 URI
+   * @param tags - 新标签集合；`undefined` 或空数组表示清空标签
+   * @returns 实际发生变化的条目数
    */
   async setItemTags(
     uris: readonly vscode.Uri[],
@@ -428,10 +435,10 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 批量为各条目独立设置标签集合（拖拽等按条目计算结果的场景），normalize/sameItemTags 规则同 setItemTags。
+   * 批量替换多个条目的标签，每个条目可使用不同的标签集合。
    *
-   * @param updates - 逐条目的更新列表（uri 定位条目，tags 为该条目的新标签集合）
-   * @returns 发生变化的条目数；无实际变化时不写盘、不触发刷新
+   * @param updates - 按 URI 定位的标签更新列表
+   * @returns 实际发生变化的条目数
    */
   async applyItemTags(
     updates: readonly ItemTagUpdate[]
@@ -450,11 +457,11 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 重命名分组：批量改写所属条目的 group 字段（组的显示位置随首个成员移动）。
+   * 重命名分组，并更新该分组的所有成员。
    *
-   * @param oldName - 现分组名
-   * @param newName - 新分组名；空白或与现名相同则不处理
-   * @returns 改写的条目数；无命中或无变化时不写盘、不触发 onDidChange
+   * @param oldName - 当前分组名
+   * @param newName - 新分组名；空字符串或与当前名称相同时不处理
+   * @returns 实际更新的条目数
    */
   async renameGroup(oldName: string, newName: string): Promise<number> {
     if (!newName || oldName === newName) {
@@ -475,10 +482,10 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 解散分组：所属条目回到未分组，其路径和标签保持不变；分组随之从派生集合中消失。
+   * 解散分组，使其中的条目变为未分组并保留其他字段。
    *
    * @param name - 要解散的分组名
-   * @returns 移出该分组的条目数；无命中时不写盘、不触发 onDidChange
+   * @returns 移出该分组的条目数
    */
   async dissolveGroup(name: string): Promise<number> {
     const items = await this.getRawItems();
@@ -495,12 +502,12 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 重命名标签：批量改写所有持有该标签条目的 tags 字段（新名与条目既有标签同名时自然合并去重）。
-   * 仅替换命中元素，其余元素（含非字符串脏元素）原样保留。
+   * 重命名标签，并更新所有使用该标签的条目。若新名称已存在于同一条目，
+   * 合并后只保留一个；其他值保持原样。
    *
-   * @param oldName - 现标签名
-   * @param newName - 新标签名；空白或与现名相同则不处理
-   * @returns 改写的条目数；无命中或无变化时不写盘、不触发 onDidChange
+   * @param oldName - 当前标签名
+   * @param newName - 新标签名；空字符串或与当前名称相同时不处理
+   * @returns 实际更新的条目数
    */
   async renameTag(oldName: string, newName: string): Promise<number> {
     if (!newName || oldName === newName) {
@@ -526,11 +533,10 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 删除标签：从所有持有该标签的条目中移除该标签（条目本身保留），标签随之从派生集合中消失。
-   * 仅移除命中元素，其余元素（含非字符串脏元素）原样保留。
+   * 从所有条目中删除指定标签，保留条目和其他标签。
    *
    * @param name - 要删除的标签名
-   * @returns 改写的条目数；无命中时不写盘、不触发 onDidChange
+   * @returns 实际更新的条目数
    */
   async deleteTag(name: string): Promise<number> {
     const items = await this.getRawItems();
@@ -540,7 +546,7 @@ export class FolderStore implements vscode.Disposable {
         return item;
       }
       const next = tags.filter((tag) => tag !== name);
-      // 命中即必有变化；删除最后一个标签时保留条目的分组等其他元数据
+      // 删除最后一个标签时只移除 `tags`，保留条目的其他字段。
       return { ...(item as UsableItem), tags: next.length > 0 ? next : undefined };
     });
 
@@ -552,18 +558,18 @@ export class FolderStore implements vscode.Disposable {
     return changed;
   }
 
-  /** 释放事件发射器（扩展停用时由 context.subscriptions 统一调用）。 */
+  /** 释放数据变更事件发射器。 */
   dispose(): void {
     this._onDidChange.dispose();
   }
 
   /**
-   * 读取全部原始条目（内部统一读路径）：优先内存快照，未加载时读盘一次；
-   * 最近一次读取失败时持续抛出同一 ConfigFileError（直到 refresh/setFile），
-   * 使损坏配置期间所有写操作 fail-closed。
+   * 从缓存或配置文件读取原始条目。配置解析失败后会重复抛出同一个错误，
+   * 直到调用 {@link refresh} 或 {@link setFile}。
    *
-   * @returns 条目原始数组（通过校验的为解析产物，未通过的为原始对象）
-   * @throws ConfigFileError（JSON 语法/结构错误）或非 FileNotFound 的读错误时抛出
+   * @returns 已解析条目和校验失败原始值组成的数组
+   * @throws {ConfigFileError} JSON 语法或顶层结构无效时抛出
+   * @throws 配置文件读取失败且原因不是文件不存在时，原样抛出底层错误
    */
   private async getRawItems(): Promise<readonly unknown[]> {
     if (this.readError) {
@@ -583,10 +589,10 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 提交一次变更：写盘、更新快照、触发视图刷新。
-   * 仅替换 items；顶层未知字段与无效条目备注沿用当前快照。
+   * 保存完整条目数组，更新内存快照并通知订阅者。
    *
-   * @param items - 变更后的完整条目数组（原始对象/解析产物混合）
+   * @param items - 包含有效条目和原始无效值的完整数组
+   * @returns 表示数据已保存且变更事件已发出的 Promise
    */
   private async commit(items: readonly unknown[]): Promise<void> {
     await this.save(items);
@@ -599,26 +605,26 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 从 JSON 文件读取并校验条目数据（不触碰缓存）：不清洗、不改写任何内容。
-   * JSON 语法错误与结构错误（顶层非对象 / items 非数组）抛 ConfigFileError；
-   * 未通过 itemSchema 的条目保留原始对象并记入 invalidNotes。
+   * 读取并校验配置文件，但不更新缓存或修改文件。无效条目保留原值，并在
+   * `invalidNotes` 中记录原因。
    *
-   * @returns 配置文件内存快照；文件不存在时为空快照
-   * @throws ConfigFileError，或发生非 FileNotFound 的读错误时原样抛出
+   * @returns 配置快照；文件不存在时返回空快照
+   * @throws {ConfigFileError} JSON 语法或顶层结构无效时抛出
+   * @throws 配置文件读取失败且原因不是文件不存在时，原样抛出底层错误
    */
   private async read(): Promise<RawConfigFile> {
     let content: Uint8Array;
     try {
       content = await vscode.workspace.fs.readFile(this.fileUri);
     } catch (error) {
-      // 文件尚未创建时视为空列表
+      // 尚未创建配置文件时按空配置处理。
       if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') {
         return { top: {}, items: [], invalidNotes: [] };
       }
       throw error;
     }
 
-    // 剥离 UTF-8 BOM：部分编辑器保存的文件带 BOM，JSON.parse 不接受
+    // `JSON.parse` 不接受 UTF-8 BOM，解析前将其移除。
     let text = new TextDecoder().decode(content);
     if (text.charCodeAt(0) === 0xfeff) {
       text = text.slice(1);
@@ -640,7 +646,7 @@ export class FolderStore implements vscode.Disposable {
       );
     }
 
-    // 逐条目校验分区：通过 → 解析产物（未知字段保留）；未通过 → 原始对象原样保留并记录原因
+    // 有效条目保存解析结果；无效条目保存原值，确保后续写回不会丢失用户内容。
     const items: unknown[] = [];
     const invalidNotes: InvalidItemNote[] = [];
     topResult.data.items?.forEach((rawItem, index) => {
@@ -659,10 +665,10 @@ export class FolderStore implements vscode.Disposable {
   }
 
   /**
-   * 将条目数组序列化为 JSON 写盘（缩进 2 空格，便于手工编辑与 diff），必要时先创建父目录。
-   * 顶层未知字段经 spread 原样保留。
+   * 创建父目录，并将条目数组以两空格缩进写入 JSON。顶层未知字段保持不变。
    *
    * @param items - 要写入的完整条目数组
+   * @returns 表示文件写入完成的 Promise
    */
   private async save(items: readonly unknown[]): Promise<void> {
     await vscode.workspace.fs.createDirectory(this.storageDir);

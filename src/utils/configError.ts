@@ -3,16 +3,15 @@ import { ConfigFileError } from '../services/configFileError';
 import { openConfigGuide } from './configGuide';
 import { OPEN_CONFIG_FILE_COMMAND } from '../commands';
 
-/** 已弹过窗的错误对象（store 在同一读取代内缓存同一错误对象，据此去重避免刷屏） */
+/** 已显示过提示的错误实例，用于避免同一配置错误重复弹窗。 */
 const reported = new WeakSet<ConfigFileError>();
 
 /**
- * 上报配置文件错误：弹出含错误类型、位置与根源的非模态错误框（同一错误对象仅弹一次），
- * 并提供「打开配置文件」按钮跳转修复。
- * 主文案为本地化框架信息；根源 detail 为 zod / JSON.parse 的英文原文，直接展示不做翻译。
+ * 显示配置文件错误及修复入口。同一个错误实例只提示一次；框架文本经过本地化，
+ * Zod 或 `JSON.parse` 提供的原始诊断保持不变。
  *
- * @param error - FolderStore 读取配置文件失败的 ConfigFileError
- * @returns 用户点击「打开配置文件」并完成打开（或用户关闭弹窗）后 resolve
+ * @param error - 树配置文件读取错误
+ * @returns 表示提示已关闭或所选操作已完成的 Promise
  */
 export async function reportConfigFileError(error: ConfigFileError): Promise<void> {
   if (reported.has(error)) {
@@ -37,8 +36,6 @@ export async function reportConfigFileError(error: ConfigFileError): Promise<voi
   const GUIDE: vscode.MessageItem = { title: vscode.l10n.t('View Config Guide') };
   const choice = await vscode.window.showErrorMessage(lines.join('\n'), OPEN, GUIDE);
   if (choice === OPEN) {
-    // 经命令 ID 调用，避免与 commands 层相互 import 形成环依赖；
-    // 携带 1 基行列供命令把光标直接定位到错误处（结构错误无行列，缺省不定位）
     await vscode.commands.executeCommand(OPEN_CONFIG_FILE_COMMAND.id, {
       line: error.line,
       column: error.column,

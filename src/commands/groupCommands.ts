@@ -7,27 +7,28 @@ import { inject } from '../services/container';
 import { collectManagedUris } from './folderCommands';
 import { GROUP_ICON, isGroupEntry } from '../treeViews/foldersProvider/entries';
 import type { Entry } from '../treeViews/foldersProvider/entries';
-import { confirmDanger, createNameValidator, renameViaInputBox, showPicker } from '../utils';
+import { confirmDanger, createRequiredValidator, editViaInputBox, showPicker } from '../utils';
 
-/** 以标签形式展示（视图标题栏按钮，三态循环切换中的一环：平铺 → 标签 → 分组） */
+/** 将树切换到标签模式。 */
 export const SHOW_TAGGED_COMMAND = defineCommand('folderShelf.showTagged', () => {
   inject(ViewModeStore).set('tagged');
 });
 
-/** 以分组形式展示（视图标题栏按钮，与 showFlat/showTagged 随上下文键互斥显示） */
+/** 将树切换到分组模式。 */
 export const SHOW_GROUPED_COMMAND = defineCommand('folderShelf.showGrouped', () => {
   inject(ViewModeStore).set('grouped');
 });
 
-/** 平铺展示（视图标题栏按钮，与 showGrouped/showTagged 随上下文键互斥显示） */
+/** 将树切换到平铺模式。 */
 export const SHOW_FLAT_COMMAND = defineCommand('folderShelf.showFlat', () => {
   inject(ViewModeStore).set('flat');
 });
 
 /**
- * 重命名分组：批量改写所属条目的 group 字段。目标取右键回传的分组节点。
+ * 重命名菜单对应的分组，并更新该分组的全部条目。
  *
- * @param item - 触发菜单的树条目（须为分组节点，否则忽略）
+ * @param item - 触发菜单的条目；不是分组节点时忽略
+ * @returns 表示用户已取消或重命名已完成的 Promise
  */
 export const RENAME_GROUP_COMMAND = defineCommand(
   'folderShelf.renameGroup',
@@ -35,7 +36,7 @@ export const RENAME_GROUP_COMMAND = defineCommand(
     if (!isGroupEntry(item)) {
       return;
     }
-    await renameViaInputBox(
+    await editViaInputBox(
       item.name,
       {
         title: vscode.l10n.t('Rename Group'),
@@ -47,9 +48,10 @@ export const RENAME_GROUP_COMMAND = defineCommand(
 );
 
 /**
- * 解散分组：确认后所属条目回到未分组（条目本身保留）。目标取右键回传的分组节点。
+ * 经用户确认后解散菜单对应的分组，保留其中的条目。
  *
- * @param item - 触发菜单的树条目（须为分组节点，否则忽略）
+ * @param item - 触发菜单的条目；不是分组节点时忽略
+ * @returns 表示用户已取消或分组已解散的 Promise
  */
 export const DISSOLVE_GROUP_COMMAND = defineCommand(
   'folderShelf.dissolveGroup',
@@ -69,11 +71,11 @@ export const DISSOLVE_GROUP_COMMAND = defineCommand(
 );
 
 /**
- * 移出分组：把所选条目移出所在分组、回到未分组（未分组条目自动跳过，无副作用）。
- * 区别于 dissolveGroup（解散整个分组）。目标从菜单回传参数解析，支持多选。
+ * 将所选条目移出各自分组；本来未分组的条目保持不变。
  *
  * @param item - 触发菜单的树条目
- * @param selectedItems - 多选时的 selection 数组
+ * @param selectedItems - 多选时的完整选择
+ * @returns 表示分组更新完成的 Promise
  */
 export const MOVE_OUT_OF_GROUP_COMMAND = defineCommand(
   'folderShelf.moveOutOfGroup',
@@ -87,13 +89,11 @@ export const MOVE_OUT_OF_GROUP_COMMAND = defineCommand(
 );
 
 /**
- * 移动条目到分组（多选混选文件夹/文件均支持，目标同 removeItem 从菜单回传参数解析）。
- * QuickPick 列出现有分组 + 「新建分组…」+「移出分组」（仅当选中项中存在已分组条目时显示）；
- * 输入不存在的分组名时直接回车即可创建归组（showPicker 动态创建行）。
- * 归组后自动切换到分组视图的预留逻辑当前未开放，但保留在命令末尾供后续启用。
+ * 通过选择器将所选条目移入现有或新分组。选择中含已分组条目时，也可将其移出分组。
  *
  * @param item - 触发菜单的树条目
- * @param selectedItems - 多选时的 selection 数组
+ * @param selectedItems - 多选时的完整选择
+ * @returns 表示用户已取消或分组已更新的 Promise
  */
 export const MOVE_TO_GROUP_COMMAND = defineCommand(
   'folderShelf.moveToGroup',
@@ -112,18 +112,18 @@ export const MOVE_TO_GROUP_COMMAND = defineCommand(
       iconPath: new vscode.ThemeIcon(GROUP_ICON),
     }));
 
-    /** 附加动作项：走「新建分组…」二次输入框 */
+    /** 打开独立输入框创建分组的选择项。 */
     const NEW_GROUP_ITEM: vscode.QuickPickItem = {
       label: vscode.l10n.t('New Group…'),
       iconPath: new vscode.ThemeIcon('plus'),
     };
     items.push(NEW_GROUP_ITEM);
 
-    // 仅当选中项中存在已分组条目时才提供「移出分组」
+    // 选择中至少有一个已分组条目时才显示“移出分组”。
     const withGroups = await folderStore.getAllWithMeta();
     const groupByPath = new Map(withGroups.map((entry) => [entry.uri.toString(), entry.group]));
     const hasGrouped = targets.some((uri) => groupByPath.get(uri.toString()) !== undefined);
-    /** 附加动作项：把选中条目移出所在分组 */
+    /** 将所选条目移出分组的选择项。 */
     const MOVE_OUT_OF_GROUP_ITEM: vscode.QuickPickItem = {
       label: vscode.l10n.t('Remove from Group'),
       iconPath: new vscode.ThemeIcon('close'),
@@ -132,7 +132,7 @@ export const MOVE_TO_GROUP_COMMAND = defineCommand(
       items.push(MOVE_OUT_OF_GROUP_ITEM);
     }
 
-    // 标题显示待移动条目名单，让操作对象一目了然
+    // 在标题中列出操作对象，避免多选时目标不明确。
     const names = targets.map((uri) => path.basename(uri.fsPath));
     const title = vscode.l10n.t('Move {0} to Group', names.join(', '));
 
@@ -146,13 +146,13 @@ export const MOVE_TO_GROUP_COMMAND = defineCommand(
       return;
     }
 
-    // 输入新名直接创建并归组
+    // 直接输入新名称时创建分组并移动条目。
     if (choice.kind === 'created') {
       await folderStore.setItemGroups(targets, choice.name);
       return;
     }
 
-    // 命中「移出分组」动作项
+    // “移出分组”选择项清除所选条目的分组。
     if (choice.item === MOVE_OUT_OF_GROUP_ITEM) {
       await folderStore.setItemGroups(targets, undefined);
       return;
@@ -162,7 +162,7 @@ export const MOVE_TO_GROUP_COMMAND = defineCommand(
       const name = await vscode.window.showInputBox({
         title: vscode.l10n.t('New Group'),
         prompt: vscode.l10n.t('Enter group name'),
-        validateInput: createNameValidator(vscode.l10n.t('Group name cannot be empty.')),
+        validateInput: createRequiredValidator(vscode.l10n.t('Group name cannot be empty.')),
       });
       if (name === undefined || name.trim() === '') {
         return;
@@ -172,7 +172,7 @@ export const MOVE_TO_GROUP_COMMAND = defineCommand(
       await folderStore.setItemGroups(targets, choice.item.label);
     }
 
-    // 预留功能：归组后自动切换到分组视图；当前保持用户原有视图模式
+    // 自动切换视图的功能开关目前关闭，操作后保留用户当前模式。
     if (viewModeStore.mode === 'flat' && false) {
       viewModeStore.set('grouped');
     }
