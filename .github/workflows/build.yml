@@ -1,0 +1,35 @@
+name: Build Extension
+
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 项目目前没有 package-lock.json，所以用 npm install
+      # TODO: 提交 lock 文件后，改回 npm ci 并在 setup-node 中启用 cache: npm
+      - name: Install dependencies
+        run: npm install
+
+      - name: Package extension
+        run: npm run package
+
+      - name: Upload vsix artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: folder-shelf-vsix
+          path: '*.vsix'
+          if-no-files-found: error
