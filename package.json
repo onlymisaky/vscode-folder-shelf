@@ -1,23 +1,6 @@
 {
   "name": "folder-shelf",
-  "displayName": "%folderShelf.displayName%",
-  "description": "%folderShelf.description%",
-  "publisher": "onlymisaky",
-  "icon": "resources/icon.png",
-  "version": "0.0.1",
-  "engines": {
-    "vscode": "^1.90.0"
-  },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [],
-  "extensionKind": [
-    "ui",
-    "workspace"
-  ],
   "main": "./dist/extension.js",
-  "l10n": "./l10n",
   "files": [
     "dist",
     "resources",
@@ -26,6 +9,45 @@
     "package.nls.zh-cn.json",
     "README.md",
     "README.zh-cn.md"
+  ],
+  "scripts": {
+    "watch:esbuild": "node esbuild.mjs --watch",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint .",
+    "l10n:extract": "vscode-l10n-dev export ./src --outDir ./l10n",
+    "vscode:prepublish": "npm run check-types && npm run lint && npm run l10n:extract && node esbuild.mjs",
+    "package": "vsce package --no-dependencies --allow-missing-repository --skip-license"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "24.x",
+    "@types/vscode": "^1.90.0",
+    "@vscode/l10n-dev": "^0.0.35",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.5.0",
+    "jiti": "^2.7.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "displayName": "%folderShelf.displayName%",
+  "description": "%folderShelf.description%",
+  "publisher": "onlymisaky",
+  "version": "0.0.1",
+  "l10n": "./l10n",
+  "icon": "resources/icon.png",
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "extensionKind": [
+    "ui",
+    "workspace"
   ],
   "contributes": {
     "commands": [
@@ -56,7 +78,7 @@
       {
         "command": "folderShelf.openConfigFile",
         "title": "%folderShelf.openConfigFile.title%",
-        "icon": "$(json)"
+        "icon": "$(pencil)"
       },
       {
         "command": "folderShelf.collapseAll",
@@ -353,27 +375,5 @@
         }
       ]
     }
-  },
-  "scripts": {
-    "watch:esbuild": "node esbuild.mjs --watch",
-    "check-types": "tsc --noEmit",
-    "lint": "eslint .",
-    "l10n:extract": "vscode-l10n-dev export ./src --outDir ./l10n",
-    "vscode:prepublish": "npm run check-types && npm run lint && npm run l10n:extract && node esbuild.mjs",
-    "package": "vsce package --no-dependencies --allow-missing-repository --skip-license"
-  },
-  "devDependencies": {
-    "@types/node": "24.x",
-    "@types/vscode": "^1.90.0",
-    "@vscode/l10n-dev": "^0.0.35",
-    "@vscode/vsce": "^4.0.0",
-    "esbuild": "^0.28.1",
-    "eslint": "^10.5.0",
-    "jiti": "^2.7.0",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.61.1"
-  },
-  "dependencies": {
-    "zod": "^4.6.7"
   }
 }

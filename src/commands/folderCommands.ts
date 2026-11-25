@@ -16,7 +16,7 @@ interface FileManagerLabels {
 }
 
 /**
- * 将资源加入列表，并提示因重复而跳过的数量。
+ * 将资源加入列表，并按实际结果提示：单个条目时带上名称，多个条目时显示数量。
  *
  * @param folderStore - 列表存储服务
  * @param uris - 待添加的资源 URI
@@ -26,11 +26,24 @@ async function addAndReportSkipped(
   folderStore: FolderStore,
   uris: readonly vscode.Uri[]
 ): Promise<void> {
-  const { skipped } = await folderStore.add(uris);
+  if (uris.length === 0) {
+    return;
+  }
+  const { added, skipped } = await folderStore.add(uris);
+
+  const first = path.basename(uris[0]!.fsPath);
+
+  if (added > 0) {
+    const msg = added === 1
+      ? vscode.l10n.t('Added "{0}" to the list.', first)
+      : vscode.l10n.t('Added {0} items to the list.', added);
+    await vscode.window.showInformationMessage(msg);
+  }
   if (skipped > 0) {
-    await vscode.window.showInformationMessage(
-      vscode.l10n.t('{0} item(s) already in the list and were skipped.', skipped)
-    );
+    const msg = skipped === 1
+      ? vscode.l10n.t('"{0}" is already in the list.', first)
+      : vscode.l10n.t('{0} items are already in the list.', skipped);
+    await vscode.window.showInformationMessage(msg);
   }
 }
 
